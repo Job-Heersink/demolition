@@ -1,0 +1,11 @@
+name: demolition
+channels:
+  - conda-forge
+  - projectchrono
+dependencies:
+  - python=3.8
+  - numpy
+  - pandas
+  - pychrono
+#  - pip:
+#    - Flask-Testing
