@@ -1,11 +1,13 @@
-name: demolition
+name: demolition3
 channels:
+  - dlr-sc
+  - projectchrono/label/develop
   - conda-forge
-  - projectchrono
 dependencies:
-  - python=3.8
+  - python=3.7
   - numpy
   - pandas
   - pychrono
-#  - pip:
-#    - Flask-Testing
+  - pythonocc-core
+
+#conda env update --file=environment.yml

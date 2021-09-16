@@ -14,7 +14,7 @@ import pychrono.fea as fea
 import pychrono.pardisomkl as mkl
 import pychrono.irrlicht as chronoirr
 
-print ("Example: PyChrono using  beam finite elements");
+print ("Example: PyChrono using  beam finite elements")
 
 # The path to the Chrono data directory containing various assets (meshes, textures, data files)
 # is automatically set, relative to the default location of this demo.

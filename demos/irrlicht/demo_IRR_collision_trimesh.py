@@ -74,14 +74,14 @@ mysystem.Add(mfloor)
 # and will automatically compute the mass property (COG position respect to REF, 
 # mass and inertia tensor) given an uniform density.
 
-body_A= chrono.ChBodyEasyMesh(chrono.GetChronoDataFile('models/bulldozer/shoe_view.obj'), # mesh filename
+body_A= chrono.ChBodyEasyMesh("../../models/simple_house.obj", # mesh filename
                               7000,             # density kg/m^3
                               True,             # automatically compute mass and inertia
                               True,             # visualize?>
                               True,             # collide?
                               contact_material, # contact material
                               )
-body_A.SetPos(chrono.ChVectorD(0.5,0.5,0))
+body_A.SetPos(chrono.ChVectorD(0.5,10,0))
 mysystem.Add(body_A)
 
 
