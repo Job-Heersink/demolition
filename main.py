@@ -3,16 +3,6 @@ import sys
 
 sys.path.append('/home/job/.local/lib/python3.7/site-packages')
 
-from math import radians
-from mathutils import Vector, Euler, Quaternion
-from tensorflow import keras
-import tensorflow as tf
-import serial
-import requests
-import numpy as np
-from threading import Thread
-import time
-
 bpy.app.debug_wm = False
 
 materials = {"concrete": {"type":"ACTIVE","density":12,"friction":0.7}, #these values are not correct yet
