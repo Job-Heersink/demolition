@@ -3,7 +3,7 @@ import sys
 
 sys.path.append('/home/job/.local/lib/python3.7/site-packages')
 
-from math import radians
+from math import radians, sqrt
 from mathutils import Vector, Euler, Quaternion
 from tensorflow import keras
 import tensorflow as tf
@@ -17,7 +17,24 @@ bpy.app.debug_wm = False
 
 materials = {"concrete": {"type":"ACTIVE","density":12,"friction":0.7}, #these values are not correct yet
             "metal":{},
-            "ground": {"type":"PASSIVE"}}
+            "ground": {"type":"PASSIVE","friction":1}}
+            
+def evaluate_demolition(scene, ideal_radius, ideal_height):
+    max_radius = 0
+    max_height = 0
+    for obj in bpy.context.scene.objects: 
+            for m in materials:
+                if m == "ground":
+                    continue
+                if obj.name.startswith(m):
+                    loc = obj.matrix_world.translation
+                    max_height = max(loc[2], max_height)
+                    max_radius = max(sqrt(loc[0]**2+loc[1]**2), max_radius) #todo: this treats the center of an object as its location, but in reality we want to check its edges
+                    print(f"max radius {max_radius}")
+                    print(f"max height {max_height}") 
+                    print(obj.name+"  :  "+ str(loc))
+       
+    
 
 # define the sliders of the UI window
 class MyProperties(bpy.types.PropertyGroup):
@@ -102,6 +119,8 @@ class DEMOLITION_OT_stop(bpy.types.Operator):
         scene = context.scene
         mytool = scene.my_tool
         
+        evaluate_demolition(scene,0,0)
+        
         bpy.ops.screen.animation_cancel()
         bpy.ops.object.select_all(action='DESELECT')
 
@@ -131,7 +150,6 @@ class DEMOLITION_OT_reset(bpy.types.Operator):
                     bpy.context.view_layer.objects.active = None
 
         return {'FINISHED'}
-    
 
 # required blender specific functions
 classes = [MyProperties, DEMOLITION_PT_main_panel, DEMOLITION_OT_start, DEMOLITION_OT_stop, DEMOLITION_OT_initialize, DEMOLITION_OT_reset]
