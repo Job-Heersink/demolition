@@ -9,7 +9,6 @@ bpy.app.debug_wm = False
 
 materials = {"concrete": {"type": "ACTIVE", "density": 12, "friction": 0.7},  #TODO these values are not correct yet
              "metal": {"type": "ACTIVE", "density": 12, "friction": 0.7},
-             "dish": {"type": "ACTIVE", "density": 5, "friction": 0.8},
              "ground": {"type": "PASSIVE", "friction": 1}}
 
 def eval(x):
@@ -18,55 +17,47 @@ def eval(x):
     else:
         return 0
     
-def find_position_sides(obj): #TODO test this for actual rotation
+def find_position_sides(obj):
     xRot = obj.rotation_euler[0]
     yRot = obj.rotation_euler[1]
     zRot = obj.rotation_euler[2]
     
-    xrot_matrix = Matrix.Rotation(xRot, 3, 'X')
-    yrot_matrix = Matrix.Rotation(yRot, 3, 'Y')
-    zrot_matrix = Matrix.Rotation(zRot, 3, 'Z')
+    xrot_matrix = Matrix(   Vector((1,0,0)),
+                            Vector((0, cos(xRot), -sin(xRot))),
+                            Vector((0, sin(xRot), cos(xRot))))
+    yrot_matrix = Matrix(   Vector(( cos(yRot), 0, sin(yRot))),
+                            Vector(( 0, 1, 0))
+                            Vector((-sin(yRot),0,cos(yRot))))
+    zrot_matrix = Matrix(   Vector(( cos(zRot), sin(zRot), 0)),
+                            Vector(( -sin(zRot), cos(zRot), 0)),
+                            Vector((0,0,1)))
                             
-    end_point1 = Vector((0,0,obj.scale[2]))
-    end_point2 = Vector((0,0,-obj.scale[2])) #add more than just the z endpoints, also add x and y.
+    end_point1 = Vector(0,0,obj.scale[2]/2)
+    end_point2 = Vector(0,0,-obj.scale[2]/2) #add more than just the z endpoints, also add x and y.
     
-    end_point1 = end_point1 @ xrot_matrix @ yrot_matrix @ zrot_matrix
-    end_point2 = end_point2 @ xrot_matrix @ yrot_matrix @ zrot_matrix
+    end_point1 = end_point1*xrot_matrix*yrot_matrix*zrot_matrix
+    end_point2 = end_point2*xrot_matrix*yrot_matrix*zrot_matrix
     
-    end_point1 = obj.matrix_world.translation+end_point1
-    end_point2 = obj.matrix_world.translation+end_point2
-    #if obj.name == 'metal.rod.001':
-    #    print(xRot)
-    #    print(yRot)
-    #    print(zRot)
-    #    print(obj.location)
-    #    print(Vector((0,0,obj.scale[2]/2)))         
-    #    print(obj.name + str(end_point1))
-    #    print(obj.name + str(end_point2))
+    end_point1 = obj.location+end_point1
+    end_point2 = obj.location+end_point2
+    
+    print(end_point1)
+    print(end_point2)
     
     return end_point1, end_point2, obj.location
     
 def find_closest_object(this_obj):
-    threshold = 1
-    assert(this_obj.name.startswith("hinge"))
+    threshold = 0.1
     
     for obj in bpy.context.scene.objects:
-        for m in materials:
-            if m == "ground" or this_obj == obj or this_obj.parent == obj:
-                continue
-            
-            if obj.name.startswith(m):
+        if this_obj == obj:
+            continue
         
-                poss = find_position_sides(obj)
-                
-                #if this_obj.parent.name == "metal.rod.001" and obj.name == "metal.rod.002":
-                #    print(obj.name)
-                #    print(this_obj.parent.name)
-                #    print((this_obj.matrix_world.translation-poss[1]).length)
-                
-                for p in poss:
-                    if -threshold < (this_obj.matrix_world.translation-p).length < threshold:
-                        return obj
+        poss = find_position_sides(obj)
+        
+        for p in poss:
+            if -threshold < (this_obj.location-p).length < threshold:
+                return obj
         
     return None
                 
@@ -106,8 +97,8 @@ def evaluate_demolition(scene, hard_max_radius, hard_max_height):
 
 # define the sliders of the UI window
 class MyProperties(bpy.types.PropertyGroup):
-        dem_threshold_float: bpy.props.FloatProperty(name="Breaking threshold", soft_min=0, soft_max=50, default=10, step=0.1,
-                                               precision=2)
+    my_float_property: bpy.props.FloatProperty(name="Power %", soft_min=0, soft_max=100, default=50, step=2,
+                                               precision=1)
 
 
 # initiate the UI panel
@@ -126,7 +117,6 @@ class DEMOLITION_PT_main_panel(bpy.types.Panel):
         layout.label(text="setup")
         layout.operator("demolition.op_initialize")
         layout.operator("demolition.op_reset")
-        layout.prop(mytool, "dem_threshold_float")
         layout.label(text="animation")
         layout.operator("demolition.op_start")
         layout.operator("demolition.op_stop")
@@ -173,7 +163,7 @@ class DEMOLITION_OT_initialize(bpy.types.Operator):
                 next_paired_obj = find_closest_object(obj)
                 if next_paired_obj is not None:
                     bpy.context.object.rigid_body_constraint.object2 = next_paired_obj
-                bpy.context.object.rigid_body_constraint.breaking_threshold = mytool.dem_threshold_float
+                bpy.context.object.rigid_body_constraint.breaking_threshold = 3
                 
             obj.select_set(False)
             bpy.context.view_layer.objects.active = None
@@ -223,17 +213,6 @@ class DEMOLITION_OT_reset(bpy.types.Operator):
         bpy.ops.object.select_all(action='DESELECT')
         
         to_be_deleted = []
-        
-        for obj in bpy.context.scene.objects:                    
-            if obj.name.startswith("hinge"):
-                bpy.context.view_layer.objects.active = obj
-                obj.select_set(True)
-
-                bpy.ops.rigidbody.constraint_remove()
-
-                obj.select_set(False)
-                bpy.context.view_layer.objects.active = None
-
 
         for obj in bpy.context.scene.objects:
             for m in materials:
@@ -244,8 +223,15 @@ class DEMOLITION_OT_reset(bpy.types.Operator):
                     bpy.ops.rigidbody.object_remove()
                     bpy.ops.object.modifier_remove(modifier="Collision")
                     
-                    obj.select_set(False)
-                    bpy.context.view_layer.objects.active = None
+            if obj.name.startswith("hinge"):
+                bpy.context.view_layer.objects.active = obj
+                obj.select_set(True)
+
+                bpy.ops.rigidbody.constraint_remove()
+
+                obj.select_set(False)
+                bpy.context.view_layer.objects.active = None
+
 
         return {'FINISHED'}
 
