@@ -12,6 +12,15 @@ materials = {"concrete": {"type": "ACTIVE", "density": 12, "friction": 0.7},  #T
              "dish": {"type": "ACTIVE", "density": 5, "friction": 0.8},
              "ground": {"type": "PASSIVE", "friction": 1}}
 
+def calc_physics():
+    bpy.context.scene.rigidbody_world.time_scale = 2
+    bpy.context.scene.rigidbody_world.substeps_per_frame = 10
+    bpy.context.scene.rigidbody_world.solver_iterations = 10
+    bpy.context.scene.frame_start = 1
+    bpy.context.scene.frame_end = 200
+    bpy.ops.ptcache.bake(bake=True)
+
+
 def eval(x):
     if x >= 0 and x <= 1:
         return -0.5*(2*x-1)**3+0.5
