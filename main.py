@@ -12,20 +12,18 @@ materials = {"concrete": {"type": "ACTIVE", "density": 12, "friction": 0.7},  #T
              "dish": {"type": "ACTIVE", "density": 5, "friction": 0.8},
              "ground": {"type": "PASSIVE", "friction": 1}}
 
-def calc_physics():
-    bpy.context.scene.rigidbody_world.time_scale = 2
-    bpy.context.scene.rigidbody_world.substeps_per_frame = 10
-    bpy.context.scene.rigidbody_world.solver_iterations = 10
+def calc_physics(mytool):
+    bpy.ops.ptcache.free_bake_all()
+    bpy.context.scene.rigidbody_world.time_scale = mytool.dem_speed_float
+    bpy.context.scene.rigidbody_world.substeps_per_frame = int(mytool.dem_substeps_float)
+    bpy.context.scene.rigidbody_world.solver_iterations = int(mytool.dem_solver_iter_float)
     bpy.context.scene.frame_start = 1
-    bpy.context.scene.frame_end = 200
-    bpy.ops.ptcache.bake(bake=True)
+    bpy.context.scene.frame_end = 100
+    bpy.ops.ptcache.bake_all(bake=True)
 
-
+# linear function
 def eval(x):
-    if x >= 0 and x <= 1:
-        return -0.5*(2*x-1)**3+0.5
-    else:
-        return 0
+        return x if x >= 0 and x <= 1 else 0
     
 def find_position_sides(obj): #TODO test this for actual rotation
     xRot = obj.rotation_euler[0]
@@ -44,14 +42,6 @@ def find_position_sides(obj): #TODO test this for actual rotation
     
     end_point1 = obj.matrix_world.translation+end_point1
     end_point2 = obj.matrix_world.translation+end_point2
-    #if obj.name == 'metal.rod.001':
-    #    print(xRot)
-    #    print(yRot)
-    #    print(zRot)
-    #    print(obj.location)
-    #    print(Vector((0,0,obj.scale[2]/2)))         
-    #    print(obj.name + str(end_point1))
-    #    print(obj.name + str(end_point2))
     
     return end_point1, end_point2, obj.location
     
@@ -67,11 +57,6 @@ def find_closest_object(this_obj):
             if obj.name.startswith(m):
         
                 poss = find_position_sides(obj)
-                
-                #if this_obj.parent.name == "metal.rod.001" and obj.name == "metal.rod.002":
-                #    print(obj.name)
-                #    print(this_obj.parent.name)
-                #    print((this_obj.matrix_world.translation-poss[1]).length)
                 
                 for p in poss:
                     if -threshold < (this_obj.matrix_world.translation-p).length < threshold:
@@ -100,23 +85,22 @@ def evaluate_demolition(scene, hard_max_radius, hard_max_height):
     print(f"max height {max_height}")
     print(f"hard max radius {hard_max_radius}")
     print(f"hard max height {hard_max_height}")
-    radius_eval = eval(max_radius/hard_max_radius)
-    height_eval = eval(max_height/hard_max_height)
+    radius_eval = eval(max_radius/(hard_max_radius*2))
+    height_eval = eval(max_height/(hard_max_height*2))
     
     print(f"eval radius {radius_eval}")
     print(f"eval height {height_eval}")
     
-    return (radius_eval+height_eval)/2
-    
-    #print(bpy.ops.mesh.primitive_circle_add(location=(0,0,0.01), radius=max_radius))
-    
-    
+    return radius_eval, height_eval
 
 
 # define the sliders of the UI window
 class MyProperties(bpy.types.PropertyGroup):
         dem_threshold_float: bpy.props.FloatProperty(name="Breaking threshold", soft_min=0, soft_max=50, default=10, step=0.1,
                                                precision=2)
+        dem_substeps_float: bpy.props.FloatProperty(name="Substeps Per Frame", soft_min=0, soft_max=100, default=10, step=1)
+        dem_solver_iter_float: bpy.props.FloatProperty(name="Solver Iterations", soft_min=0, soft_max=100, default=10, step=1)
+        dem_speed_float: bpy.props.FloatProperty(name="Speed", soft_min=0, soft_max=10, default=1, step=0.1, precision=2)
 
 
 # initiate the UI panel
@@ -137,8 +121,13 @@ class DEMOLITION_PT_main_panel(bpy.types.Panel):
         layout.operator("demolition.op_reset")
         layout.prop(mytool, "dem_threshold_float")
         layout.label(text="animation")
+        layout.prop(mytool, "dem_substeps_float")
+        layout.prop(mytool, "dem_solver_iter_float")
+        layout.prop(mytool, "dem_speed_float")
         layout.operator("demolition.op_start")
         layout.operator("demolition.op_stop")
+        layout.label(text="find optimal demolition")
+        layout.operator("demolition.op_genetic")
 
 
 class DEMOLITION_OT_initialize(bpy.types.Operator):
@@ -199,6 +188,7 @@ class DEMOLITION_OT_start(bpy.types.Operator):
         mytool = scene.my_tool
 
         bpy.ops.object.select_all(action='DESELECT')
+        calc_physics(mytool)
         bpy.ops.screen.animation_play()
 
         return {'FINISHED'}
@@ -216,6 +206,45 @@ class DEMOLITION_OT_stop(bpy.types.Operator):
 
         bpy.ops.screen.animation_cancel()
         bpy.ops.object.select_all(action='DESELECT')
+
+        return {'FINISHED'}
+    
+class DEMOLITION_OT_genetic(bpy.types.Operator):
+    bl_label = "Genetic algorithm"
+    bl_idname = "demolition.op_genetic"
+
+    def execute(self, context):
+        scene = context.scene
+        mytool = scene.my_tool
+
+        ##THIS IS FOR YOU SYTSE!!!
+        print("insert genetic algorithm here")
+        
+        ##I MADE A START FOR YOU TO GET URSELF UNDERWAY
+        iter = 1
+        for i in range(iter):
+            #remove some object from the structure
+            #INSERT CODE HERE
+            
+            #calculate the physics using the function i made for u
+            calc_physics(mytool)
+            
+            #goto the last frame
+            bpy.context.scene.frame_set(previous_keyframe)
+            
+            #and evaluate
+            hard_max_radius = 100 #fill these in yourself
+            hard_max_height = 100 #fill these in yourself
+            r,h = evaluate_demolition(scene, hard_max_radius, hard_max_height)
+            
+            #Do some genetic algorithm magic
+            #INSERT CODE HERE
+            
+            #add the removed object back again
+            #INSERT CODE HERE
+        
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.view_layer.objects.active = None
 
         return {'FINISHED'}
 
@@ -261,7 +290,7 @@ class DEMOLITION_OT_reset(bpy.types.Operator):
 
 # required blender specific functions
 classes = [MyProperties, DEMOLITION_PT_main_panel, DEMOLITION_OT_start, DEMOLITION_OT_stop, DEMOLITION_OT_initialize,
-           DEMOLITION_OT_reset]
+           DEMOLITION_OT_reset,DEMOLITION_OT_genetic]
 
 
 def register():
