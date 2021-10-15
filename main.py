@@ -7,9 +7,9 @@ sys.path.append('/home/job/.local/lib/python3.7/site-packages')
 
 bpy.app.debug_wm = False
 
-materials = {"concrete": {"type": "ACTIVE", "density": 12, "friction": 0.7},  #TODO these values are not correct yet
-             "metal": {"type": "ACTIVE", "density": 12, "friction": 0.7},
-             "dish": {"type": "ACTIVE", "density": 5, "friction": 0.8},
+materials = {#"concrete": {"type": "ACTIVE", "density": 7500, "friction": 0.7,"collision_shape": "CONVEX_HULL"},  #TODO these values are not correct yet
+             "metal": {"type": "ACTIVE", "density": 7500, "friction": 0.42,"collision_shape": "CYLINDER"},
+             "dish": {"type": "ACTIVE", "density": 2710, "friction": 1.4,"collision_shape": "CONVEX_HULL"},
              "ground": {"type": "PASSIVE", "friction": 1}}
 
 def calc_physics(mytool):
@@ -147,11 +147,15 @@ class DEMOLITION_OT_initialize(bpy.types.Operator):
                     obj.select_set(True)
 
                     bpy.ops.rigidbody.object_add(type=mat["type"] if mat["type"] else "ACTIVE")
-                    bpy.ops.rigidbody.shape_change(type='CONVEX_HULL')  # todo: maybe not mesh? its very slow
+                    if "collision_shape" in mat:
+                        bpy.ops.rigidbody.shape_change(type=mat["collision_shape"])
+                    else:
+                        bpy.ops.rigidbody.shape_change(type='CONVEX_HULL')
+                        
                     bpy.ops.object.modifier_add(type='COLLISION')
 
                     if "density" in mat:
-                        bpy.ops.rigidbody.mass_calculate(density=mat["density"])
+                        bpy.ops.rigidbody.mass_calculate(material='Custom',density=mat["density"])
 
                     if "friction" in mat:
                         obj.rigid_body.friction = mat["friction"]
