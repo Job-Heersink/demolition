@@ -96,9 +96,7 @@ def evaluate_demolition(scene, hard_max_radius, hard_max_height):
 
     return radius_eval, height_eval
 
-def addObjectProperties(object_name):
-    obj = bpy.context.scene.objects[object_name]
-
+def addObjectProperties(obj, breaking_threshold):
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
 
@@ -111,7 +109,7 @@ def addObjectProperties(object_name):
         next_paired_obj = find_closest_object(obj)
         if next_paired_obj is not None:
             bpy.context.object.rigid_body_constraint.object2 = next_paired_obj
-        bpy.context.object.rigid_body_constraint.breaking_threshold = breaking_threshold
+        bpy.context.object.rigid_body_constraint.breaking_threshold = breaking_threshold #TODO: breaking threshold
 
     for m in materials:
         if obj.name.startswith(m):
@@ -159,13 +157,13 @@ def alreadyInitialized():
     return obj.rigid_body.friction != 0
 
 def initMaterialProperties(breaking_threshold):
-    if alreadyInitialized():
-        return
+    #if alreadyInitialized():
+    #    return
 
     bpy.ops.object.select_all(action='DESELECT')
 
     for obj in bpy.context.scene.objects:
-        addObjectProperties(obj.name)
+        addObjectProperties(obj, breaking_threshold)
 
 
 
@@ -213,8 +211,8 @@ class DEMOLITION_OT_initialize(bpy.types.Operator):
         scene = context.scene
         mytool = scene.my_tool
 
-        cont = bpy.context.area.type
-        print(str(cont))
+        #cont = bpy.context.area.type
+        #rint(str(cont))
 
         initMaterialProperties(mytool.dem_threshold_float)
 
@@ -281,12 +279,12 @@ class DEMOLITION_OT_genetic(bpy.types.Operator):
             temp.location += Vector((0.0, 0.0, -50.0))
             print("removed" + self.removable_object_names[idx])
 
-    def resetModel(self, gene):
+    def resetModel(self, gene, breaking_threshold):
         for idx in gene:
             temp = bpy.context.scene.objects["removedObj" + str(idx)]
             temp.name = self.removable_object_names[idx]
             temp.location += Vector((0.0, 0.0, 50.0))
-            addObjectProperties(temp.name)
+            addObjectProperties(temp, breaking_threshold)
 
     def evaluateGene(self, gene, mytool):
         self.initEvaluation(gene)
@@ -295,7 +293,7 @@ class DEMOLITION_OT_genetic(bpy.types.Operator):
         calc_physics(mytool)
         bpy.ops.screen.animation_play()
 
-        self.resetModel(gene)
+        self.resetModel(gene, mytool.dem_threshold_float)
 
     def execute(self, context):
         scene = context.scene
@@ -381,7 +379,7 @@ class DEMOLITION_OT_reset(bpy.types.Operator):
 
         for obj in bpy.context.scene.objects:
             print(obj.name)
-            # removeObjectProperties(obj.name)
+            removeObjectProperties(obj.name)
 
         return {'FINISHED'}
 
