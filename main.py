@@ -16,20 +16,13 @@ materials = {#"concrete": {"type": "ACTIVE", "density": 7500, "friction": 0.7,"c
              "ground": {"type": "PASSIVE", "friction": 1}}
 
 object_names = []
+max_gene_size = 15
+gene_pool_size = 2
+gene_pool = []
+gene_fitness = []
+generation = 0
 
-def calc_physics(mytool):
-    bpy.ops.ptcache.free_bake_all()
-    bpy.context.scene.rigidbody_world.time_scale = mytool.dem_speed_float
-    bpy.context.scene.rigidbody_world.substeps_per_frame = int(mytool.dem_substeps_float)
-    bpy.context.scene.rigidbody_world.solver_iterations = int(mytool.dem_solver_iter_float)
-    bpy.context.scene.frame_start = 1
-    bpy.context.scene.frame_end = 200
-    bpy.ops.ptcache.bake_all(bake=True)
-
-
-# linear function
-def eval(x):
-    return x if x >= 0 and x <= 1 else 0
+displayed_demolition = []
 
 def initObjectNames():
     for obj in bpy.context.scene.objects:
@@ -44,6 +37,18 @@ def initObjectNames():
         if obj.name.startswith("hinge"):
             object_names.append(obj.name)
 
+def calc_physics(mytool):
+    bpy.ops.ptcache.free_bake_all()
+    bpy.context.scene.rigidbody_world.time_scale = mytool.dem_speed_float
+    bpy.context.scene.rigidbody_world.substeps_per_frame = int(mytool.dem_substeps_float)
+    bpy.context.scene.rigidbody_world.solver_iterations = int(mytool.dem_solver_iter_float)
+    bpy.context.scene.frame_start = 1
+    bpy.context.scene.frame_end = 300
+    bpy.ops.ptcache.bake_all(bake=True)
+
+# linear function
+def eval(x):
+    return x if x >= 0 and x <= 1 else 0
 
 def find_position_sides(obj):  # TODO test this for actual rotation
     xRot = obj.rotation_euler[0]
@@ -88,7 +93,6 @@ def find_closest_object(this_obj):
 
 # before executing this script. MAKE SURE YOUR BUILD IS CENTERED AROUND ITS ORIGIN.
 # otherwise the evaluation might not work properly
-
 def evaluate_demolition(scene, hard_max_radius, hard_max_height):
     max_radius = 0
     max_height = 0
@@ -102,17 +106,18 @@ def evaluate_demolition(scene, hard_max_radius, hard_max_height):
                 max_radius = max(sqrt(loc[0] ** 2 + loc[1] ** 2),
                                  max_radius)  # todo: this treats the center of an object as its location, but in reality we want to check its edges
 
-    print(f"max radius {max_radius}")
-    print(f"max height {max_height}")
-    print(f"hard max radius {hard_max_radius}")
-    print(f"hard max height {hard_max_height}")
-    radius_eval = eval(max_radius / (hard_max_radius * 2))
-    height_eval = eval(max_height / (hard_max_height * 2))
-
-    print(f"eval radius {radius_eval}")
-    print(f"eval height {height_eval}")
-
-    return radius_eval, height_eval
+    # print(f"max radius {max_radius}")
+    # print(f"max height {max_height}")
+    # print(f"hard max radius {hard_max_radius}")
+    # print(f"hard max height {hard_max_height}")
+    # radius_eval = eval(max_radius / (hard_max_radius * 2))
+    # height_eval = eval(max_height / (hard_max_height * 2))
+    #
+    # print(f"eval radius {radius_eval}")
+    # print(f"eval height {height_eval}")
+    #
+    # return radius_eval, height_eval
+    return max_height, max_radius
 
 def addMaterialProperties(object_name, mat):
     obj = bpy.context.scene.objects[object_name]
@@ -120,10 +125,10 @@ def addMaterialProperties(object_name, mat):
     bpy.context.view_layer.objects.active = obj
 
     bpy.ops.rigidbody.object_add(type=mat["type"] if mat["type"] else "ACTIVE")
-    if "collision_shape" in mat:
-        bpy.ops.rigidbody.shape_change(type=mat["collision_shape"])
-    else:
-        bpy.ops.rigidbody.shape_change(type='CONVEX_HULL')
+    # if "collision_shape" in mat:
+    #     bpy.ops.rigidbody.shape_change(type=mat["collision_shape"])
+    # else:
+    bpy.ops.rigidbody.shape_change(type='CONVEX_HULL')
     bpy.ops.object.modifier_add(type='COLLISION')
 
     if "density" in mat:
@@ -139,7 +144,6 @@ def addMaterialProperties(object_name, mat):
     bpy.context.view_layer.objects.active = None
 
 def addHingeProperies(object_name, breaking_threshold):
-    print(object_name)
     obj = bpy.context.scene.objects[object_name]
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
@@ -178,20 +182,10 @@ def removeHingeProperties(object_name):
     obj.select_set(False)
     bpy.context.view_layer.objects.active = None
 
-def alreadyInitialized():
-    obj = bpy.context.scene.objects["dish.001"]
-    if obj.rigid_body is None:
-        return True
-
-    return obj.rigid_body.friction != 0
-
-
+# assumes that the obj_names are sorted such that all hinges are at the back
+# of the list
 def setObjectProperties(obj_names, breaking_threshold):
-    if not alreadyInitialized():
-       return
-
     bpy.ops.object.select_all(action='DESELECT')
-
     for object_name in obj_names:
         if object_name.startswith("dis"):
             addMaterialProperties(object_name, materials["dish"])
@@ -202,14 +196,12 @@ def setObjectProperties(obj_names, breaking_threshold):
 
     bpy.ops.object.select_all(action='DESELECT')
 
+# assumes that the obj_names are sorted such that all hinges are at the front
+# of the list
 def removeObjectProperties(obj_names):
-    if alreadyInitialized():
-       return
-
     bpy.ops.object.select_all(action='DESELECT')
 
     for object_name in obj_names:
-        print(object_name)
         if object_name.startswith("dish"):
             removeMaterialProperties(object_name)
         elif object_name.startswith("metal"):
@@ -218,6 +210,64 @@ def removeObjectProperties(obj_names):
             removeHingeProperties(object_name)
 
     bpy.ops.object.select_all(action='DESELECT')
+
+def initGenes():
+    for gene_idx in range(0, gene_pool_size):
+        gene = []
+        for idx in range(0, max_gene_size):
+            objIdx = randint(0, len(object_names) - 1)
+            if objIdx not in gene:
+                gene.append(objIdx)
+
+        gene_pool.append(gene)
+
+def mutateGenes():
+    initGenes()
+
+def calculateSetup(setupIdxs, mytool):
+    obj_names = object_names.copy()
+
+    for idx in setupIdxs:
+        bpy.context.scene.objects[object_names[idx]].location += Vector((0.0, 0.0, -50.0))
+        obj_names.remove(object_names[idx])
+
+    print("going for object properties")
+    setObjectProperties(obj_names, mytool.dem_threshold_float);
+
+    print("calc physics")
+    calc_physics(mytool)
+
+def resetSetup(setupIdxs):
+    obj_names = object_names.copy()
+
+    for idx in setupIdxs:
+        obj_names.remove(object_names[idx])
+
+    obj_names.reverse()
+    removeObjectProperties(obj_names);
+
+    for idx in setupIdxs:
+        bpy.context.scene.objects[object_names[idx]].location += Vector((0.0, 0.0, 50.0))
+
+
+def evaluateGene(gene, context):
+    scene = context.scene
+
+    calculateSetup(gene, scene.my_tool)
+
+    time.sleep(10)
+    bpy.context.scene.frame_set(frame = 198)
+    radius, height = evaluate_demolition(scene, 5, 1)
+    score = radius + height + len(gene)
+
+    print("radius: " + str(radius))
+    print("height: " + str(height))
+    print("gene_size: " + str(len(gene)))
+    print("score: " + str(score))
+
+    resetSetup(gene)
+
+    return score
 
 # define the sliders of the UI window
 class MyProperties(bpy.types.PropertyGroup):
@@ -243,7 +293,7 @@ class DEMOLITION_PT_main_panel(bpy.types.Panel):
         scene = context.scene
         mytool = scene.my_tool
 
-        layout.label(text="setup")
+        layout.label(text="parameters")
         # layout.operator("demolition.op_initialize")
         # layout.operator("demolition.op_reset")
         layout.prop(mytool, "dem_threshold_float")
@@ -251,10 +301,10 @@ class DEMOLITION_PT_main_panel(bpy.types.Panel):
         layout.prop(mytool, "dem_substeps_float")
         layout.prop(mytool, "dem_solver_iter_float")
         layout.prop(mytool, "dem_speed_float")
-        # layout.operator("demolition.op_start")
-        # layout.operator("demolition.op_stop")
         layout.label(text="find optimal demolition")
         layout.operator("demolition.op_genetic")
+        layout.operator("demolition.op_start")
+        layout.operator("demolition.op_stop")
 
 
 class DEMOLITION_OT_initialize(bpy.types.Operator):
@@ -271,15 +321,30 @@ class DEMOLITION_OT_initialize(bpy.types.Operator):
 
 
 class DEMOLITION_OT_start(bpy.types.Operator):
-    bl_label = "Start"
+    bl_label = "Run best model"
     bl_idname = "demolition.op_start"
 
     def execute(self, context):
         scene = context.scene
         mytool = scene.my_tool
 
+        print(str(len(gene_fitness)))
+
         bpy.ops.object.select_all(action='DESELECT')
-        calc_physics(mytool)
+        best_score = 10000
+        index = -1
+        for idx in range(0, len(gene_fitness)):
+            if (best_score > gene_fitness[idx]):
+                best_score = gene_fitness[idx]
+                index = idx
+
+        # otherwise there is no good score
+        assert(index != -1)
+
+        displayed_demolition = gene_pool[index].copy()
+
+        calculateSetup(displayed_demolition)
+
         bpy.ops.screen.animation_play()
 
         return {'FINISHED'}
@@ -290,13 +355,15 @@ class DEMOLITION_OT_stop(bpy.types.Operator):
     bl_idname = "demolition.op_stop"
 
     def execute(self, context):
+        assert(len(displayed_demolition) != 0)
+
         scene = context.scene
         mytool = scene.my_tool
 
-        evaluate_demolition(scene, 5, 1)
-
         bpy.ops.screen.animation_cancel()
         bpy.ops.object.select_all(action='DESELECT')
+
+        resetSetup(displayed_demolition)
 
         return {'FINISHED'}
 
@@ -305,64 +372,25 @@ class DEMOLITION_OT_genetic(bpy.types.Operator):
     bl_label = "Genetic algorithm"
     bl_idname = "demolition.op_genetic"
 
-    max_gene_size = 50
-    gene_pool_size = 2
-    gene_pool = []
-
-    def initialize(self, objects):
-        seed(1)
-
-        self.createGenePool()
-
-    def createGenePool(self):
-        for gene_idx in range(0, self.gene_pool_size):
-            gene = []
-            for idx in range(0, self.max_gene_size):
-                objIdx = randint(0, len(object_names) - 1)
-                if objIdx not in gene:
-                    gene.append(objIdx)
-
-            self.gene_pool.append(gene)
-
-    def evaluateGene(self, gene, mytool):
-        obj_names = object_names.copy()
-        for idx in gene:
-            print(str(idx) + "," + str(len(object_names)))
-            bpy.context.scene.objects[object_names[idx]].location += Vector((0.0, 0.0, -50.0))
-            obj_names.remove(object_names[idx])
-
-        setObjectProperties(obj_names, mytool.dem_threshold_float);
-        calc_physics(mytool)
-        print("play animation")
-        bpy.ops.screen.animation_play()
-        radius, height = 0, 0
-        if(bpy.context.scene.frame_current == 200):
-            print("in frame 200")
-            # radius, height = evaluate_demolition(scene, 5, 1)
-            print("evaluate scene")
-            bpy.ops.screen.animation_cancel(restore_frame=True)
-
-
-        removeObjectProperties(obj_names);
-
-        for idx in gene:
-            bpy.context.scene.objects[object_names[idx]].location += Vector((0.0, 0.0, 50.0))
-
-        return  radius, height
 
     def execute(self, context):
-        scene = context.scene
-        mytool = scene.my_tool
+        if len(displayed_demolition) != 0:
+            resetSetup(displayed_demolition)
 
-        self.initialize(bpy.context.scene.objects)
+        gene_fitness = []
 
-        print("start gene calc loop")
-        for gene in self.gene_pool:
-            for idx in gene:
-                print(idx)
+        if generation == 0:
+            initGenes()
+        else:
+            mutateGenes()
 
-            radius, height = self.evaluateGene(gene, mytool)
-            print(radius, height)
+        for gene in gene_pool:
+            fitness = evaluateGene(gene, context)
+            gene_fitness.append(fitness)
+
+        print("gene scores:")
+        for fitness in gene_fitness:
+            print(fitness)
 
         return {'FINISHED'}
 
@@ -401,6 +429,7 @@ def unregister():
 
 
 if __name__ == "__main__":
+    seed(1)
     initObjectNames()
     addMaterialProperties("ground.000", materials["ground"])
     register()
