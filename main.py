@@ -23,7 +23,7 @@ def calc_physics(mytool):
     bpy.context.scene.rigidbody_world.substeps_per_frame = int(mytool.dem_substeps_float)
     bpy.context.scene.rigidbody_world.solver_iterations = int(mytool.dem_solver_iter_float)
     bpy.context.scene.frame_start = 1
-    bpy.context.scene.frame_end = 300
+    bpy.context.scene.frame_end = 200
     bpy.ops.ptcache.bake_all(bake=True)
 
 
@@ -306,17 +306,23 @@ class DEMOLITION_OT_genetic(bpy.types.Operator):
     bl_idname = "demolition.op_genetic"
 
     max_gene_size = 50
-    removable_object_names = []
-    gene = []
+    gene_pool_size = 2
+    gene_pool = []
 
     def initialize(self, objects):
         seed(1)
 
-        for idx in range(0, self.max_gene_size):
-            objIdx = randint(0, len(object_names) - 1)
-            if objIdx not in self.gene:
-                self.gene.append(objIdx)
+        self.createGenePool()
 
+    def createGenePool(self):
+        for gene_idx in range(0, self.gene_pool_size):
+            gene = []
+            for idx in range(0, self.max_gene_size):
+                objIdx = randint(0, len(object_names) - 1)
+                if objIdx not in gene:
+                    gene.append(objIdx)
+
+            self.gene_pool.append(gene)
 
     def evaluateGene(self, gene, mytool):
         obj_names = object_names.copy()
@@ -327,14 +333,22 @@ class DEMOLITION_OT_genetic(bpy.types.Operator):
 
         setObjectProperties(obj_names, mytool.dem_threshold_float);
         calc_physics(mytool)
+        print("play animation")
         bpy.ops.screen.animation_play()
+        radius, height = 0, 0
+        if(bpy.context.scene.frame_current == 200):
+            print("in frame 200")
+            # radius, height = evaluate_demolition(scene, 5, 1)
+            print("evaluate scene")
+            bpy.ops.screen.animation_cancel(restore_frame=True)
+
 
         removeObjectProperties(obj_names);
 
         for idx in gene:
             bpy.context.scene.objects[object_names[idx]].location += Vector((0.0, 0.0, 50.0))
 
-        self.resetModel(gene)
+        return  radius, height
 
     def execute(self, context):
         scene = context.scene
@@ -342,7 +356,13 @@ class DEMOLITION_OT_genetic(bpy.types.Operator):
 
         self.initialize(bpy.context.scene.objects)
 
-        self.evaluateGene(self.gene, mytool)
+        print("start gene calc loop")
+        for gene in self.gene_pool:
+            for idx in gene:
+                print(idx)
+
+            radius, height = self.evaluateGene(gene, mytool)
+            print(radius, height)
 
         return {'FINISHED'}
 
