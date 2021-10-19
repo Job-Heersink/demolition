@@ -15,6 +15,7 @@ materials = {#"concrete": {"type": "ACTIVE", "density": 7500, "friction": 0.7,"c
              "dish": {"type": "ACTIVE", "density": 2710, "friction": 1.4,"collision_shape": "CONVEX_HULL"},
              "ground": {"type": "PASSIVE", "friction": 1}}
 
+object_names = []
 
 def calc_physics(mytool):
     bpy.ops.ptcache.free_bake_all()
@@ -29,6 +30,19 @@ def calc_physics(mytool):
 # linear function
 def eval(x):
     return x if x >= 0 and x <= 1 else 0
+
+def initObjectNames():
+    for obj in bpy.context.scene.objects:
+        if obj.name.startswith("dish"):
+            object_names.append(obj.name)
+
+    for obj in bpy.context.scene.objects:
+        if obj.name.startswith("metal"):
+            object_names.append(obj.name)
+
+    for obj in bpy.context.scene.objects:
+        if obj.name.startswith("hinge"):
+            object_names.append(obj.name)
 
 
 def find_position_sides(obj):  # TODO test this for actual rotation
@@ -100,92 +114,110 @@ def evaluate_demolition(scene, hard_max_radius, hard_max_height):
 
     return radius_eval, height_eval
 
-
-def addObjectProperties(obj, breaking_threshold):
+def addMaterialProperties(object_name, mat):
+    obj = bpy.context.scene.objects[object_name]
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
 
-    if obj.name.startswith("hinge"):
-        bpy.ops.rigidbody.constraint_add()
-        bpy.context.object.rigid_body_constraint.type = 'HINGE'
-        bpy.context.object.rigid_body_constraint.disable_collisions = False
-        bpy.context.object.rigid_body_constraint.use_breaking = True
-        bpy.context.object.rigid_body_constraint.object1 = obj.parent
-        next_paired_obj = find_closest_object(obj)
-        if next_paired_obj is not None:
-            bpy.context.object.rigid_body_constraint.object2 = next_paired_obj
-        bpy.context.object.rigid_body_constraint.breaking_threshold = breaking_threshold  # TODO: breaking threshold
+    bpy.ops.rigidbody.object_add(type=mat["type"] if mat["type"] else "ACTIVE")
+    if "collision_shape" in mat:
+        bpy.ops.rigidbody.shape_change(type=mat["collision_shape"])
+    else:
+        bpy.ops.rigidbody.shape_change(type='CONVEX_HULL')
+    bpy.ops.object.modifier_add(type='COLLISION')
 
-    for m in materials:
-        if obj.name.startswith(m):
-            mat = materials[m]
+    if "density" in mat:
+        bpy.ops.rigidbody.mass_calculate(material='Custom',density=mat["density"])
 
-            bpy.ops.rigidbody.object_add(type=mat["type"] if mat["type"] else "ACTIVE")
-            if "collision_shape" in mat:
-                bpy.ops.rigidbody.shape_change(type=mat["collision_shape"])
-            else:
-                bpy.ops.rigidbody.shape_change(type='CONVEX_HULL')
-            bpy.ops.object.modifier_add(type='COLLISION')
+    if "friction" in mat:
+        obj.rigid_body.friction = mat["friction"]
 
-            if "density" in mat:
-                bpy.ops.rigidbody.mass_calculate(material='Custom',density=mat["density"])
-
-            if "friction" in mat:
-                obj.rigid_body.friction = mat["friction"]
-
-            if "restitution" in mat:
-                obj.rigid_body.restitution = mat["restitution"]
+    if "restitution" in mat:
+        obj.rigid_body.restitution = mat["restitution"]
 
     obj.select_set(False)
     bpy.context.view_layer.objects.active = None
 
+def addHingeProperies(object_name, breaking_threshold):
+    print(object_name)
+    obj = bpy.context.scene.objects[object_name]
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
 
-def removeAllProperties():
-    bpy.ops.screen.animation_cancel()
-    bpy.ops.object.select_all(action='DESELECT')
+    bpy.ops.rigidbody.constraint_add()
+    bpy.context.object.rigid_body_constraint.type = 'HINGE'
+    bpy.context.object.rigid_body_constraint.disable_collisions = False
+    bpy.context.object.rigid_body_constraint.use_breaking = True
+    bpy.context.object.rigid_body_constraint.object1 = obj.parent
+    next_paired_obj = find_closest_object(obj)
+    if next_paired_obj is not None:
+        bpy.context.object.rigid_body_constraint.object2 = next_paired_obj
+    bpy.context.object.rigid_body_constraint.breaking_threshold = breaking_threshold  # TODO: breaking threshold
 
-    for obj in bpy.context.scene.objects:
-        if obj.name.startswith("hinge"):
-            bpy.context.view_layer.objects.active = obj
-            obj.select_set(True)
+    obj.select_set(False)
+    bpy.context.view_layer.objects.active = None
 
-            bpy.ops.rigidbody.constraint_remove()
+def removeMaterialProperties(object_name):
+    obj = bpy.context.scene.objects[object_name]
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
 
-            obj.select_set(False)
-            bpy.context.view_layer.objects.active = None
+    bpy.ops.rigidbody.object_remove()
+    bpy.ops.object.modifier_remove(modifier="Collision")
 
-    for obj in bpy.context.scene.objects:
-        for m in materials:
-            if obj.name.startswith(m):
-                bpy.context.view_layer.objects.active = obj
-                obj.select_set(True)
+    obj.select_set(False)
+    bpy.context.view_layer.objects.active = None
 
-                bpy.ops.rigidbody.object_remove()
-                bpy.ops.object.modifier_remove(modifier="Collision")
+def removeHingeProperties(object_name):
+    obj = bpy.context.scene.objects[object_name]
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
 
-                obj.select_set(False)
-                bpy.context.view_layer.objects.active = None
+    bpy.ops.rigidbody.constraint_remove()
 
+    obj.select_set(False)
+    bpy.context.view_layer.objects.active = None
 
 def alreadyInitialized():
     obj = bpy.context.scene.objects["dish.001"]
     if obj.rigid_body is None:
         return True
 
-    print(obj.rigid_body.friction)
-    print(obj.rigid_body.friction != 0)
     return obj.rigid_body.friction != 0
 
 
-def initMaterialProperties(breaking_threshold):
-    # if alreadyInitialized():
-    #    return
+def setObjectProperties(obj_names, breaking_threshold):
+    if not alreadyInitialized():
+       return
 
     bpy.ops.object.select_all(action='DESELECT')
 
-    for obj in bpy.context.scene.objects:
-        addObjectProperties(obj, breaking_threshold)
+    for object_name in obj_names:
+        if object_name.startswith("dis"):
+            addMaterialProperties(object_name, materials["dish"])
+        elif object_name.startswith("metal"):
+            addMaterialProperties(object_name, materials["metal"])
+        else:
+            addHingeProperies(object_name, breaking_threshold)
 
+    bpy.ops.object.select_all(action='DESELECT')
+
+def removeObjectProperties(obj_names):
+    if alreadyInitialized():
+       return
+
+    bpy.ops.object.select_all(action='DESELECT')
+
+    for object_name in obj_names:
+        print(object_name)
+        if object_name.startswith("dish"):
+            removeMaterialProperties(object_name)
+        elif object_name.startswith("metal"):
+            removeMaterialProperties(object_name)
+        else:
+            removeHingeProperties(object_name)
+
+    bpy.ops.object.select_all(action='DESELECT')
 
 # define the sliders of the UI window
 class MyProperties(bpy.types.PropertyGroup):
@@ -212,15 +244,15 @@ class DEMOLITION_PT_main_panel(bpy.types.Panel):
         mytool = scene.my_tool
 
         layout.label(text="setup")
-        layout.operator("demolition.op_initialize")
-        layout.operator("demolition.op_reset")
+        # layout.operator("demolition.op_initialize")
+        # layout.operator("demolition.op_reset")
         layout.prop(mytool, "dem_threshold_float")
         layout.label(text="animation")
         layout.prop(mytool, "dem_substeps_float")
         layout.prop(mytool, "dem_solver_iter_float")
         layout.prop(mytool, "dem_speed_float")
-        layout.operator("demolition.op_start")
-        layout.operator("demolition.op_stop")
+        # layout.operator("demolition.op_start")
+        # layout.operator("demolition.op_stop")
         layout.label(text="find optimal demolition")
         layout.operator("demolition.op_genetic")
 
@@ -233,10 +265,7 @@ class DEMOLITION_OT_initialize(bpy.types.Operator):
         scene = context.scene
         mytool = scene.my_tool
 
-        # cont = bpy.context.area.type
-        # rint(str(cont))
-
-        initMaterialProperties(mytool.dem_threshold_float)
+        setObjectProperties(object_names, mytool.dem_threshold_float)
 
         return {'FINISHED'}
 
@@ -281,43 +310,29 @@ class DEMOLITION_OT_genetic(bpy.types.Operator):
     gene = []
 
     def initialize(self, objects):
-        #make sure all physics properties are deleted when fucking with objects
-        removeAllProperties()
         seed(1)
-        for obj in objects:
-            if obj.name.startswith("metal"):
-                self.removable_object_names.append(obj.name)
-            if obj.name.startswith("hinge"):
-                self.removable_object_names.append(obj.name)
 
         for idx in range(0, self.max_gene_size):
-            objIdx = randint(0, len(self.removable_object_names))
+            objIdx = randint(0, len(object_names) - 1)
             if objIdx not in self.gene:
                 self.gene.append(objIdx)
 
-    def initEvaluation(self, gene):
-        for idx in gene:
-            temp = bpy.context.scene.objects[self.removable_object_names[idx]]
-            temp.name = "removedObj" + str(idx)
-            temp.location += Vector((0.0, 0.0, -50.0))
-            print("removed" + self.removable_object_names[idx])
-
-    def resetModel(self, gene):
-        # make sure all physics properties are deleted when fucking with objects
-        removeAllProperties()
-        for idx in gene:
-            temp = bpy.context.scene.objects["removedObj" + str(idx)]
-            temp.name = self.removable_object_names[idx]
-            temp.location += Vector((0.0, 0.0, 50.0))
 
     def evaluateGene(self, gene, mytool):
-        self.initEvaluation(gene)
+        obj_names = object_names.copy()
+        for idx in gene:
+            print(str(idx) + "," + str(len(object_names)))
+            bpy.context.scene.objects[object_names[idx]].location += Vector((0.0, 0.0, -50.0))
+            obj_names.remove(object_names[idx])
 
-        # only when calc_physic, do the objects have physics properties
-        initMaterialProperties(mytool.dem_threshold_float)
-        bpy.ops.object.select_all(action='DESELECT')
+        setObjectProperties(obj_names, mytool.dem_threshold_float);
         calc_physics(mytool)
         bpy.ops.screen.animation_play()
+
+        removeObjectProperties(obj_names);
+
+        for idx in gene:
+            bpy.context.scene.objects[object_names[idx]].location += Vector((0.0, 0.0, 50.0))
 
         self.resetModel(gene)
 
@@ -325,59 +340,9 @@ class DEMOLITION_OT_genetic(bpy.types.Operator):
         scene = context.scene
         mytool = scene.my_tool
 
-        cont = bpy.context.area.type
-        print(str(cont))
-
         self.initialize(bpy.context.scene.objects)
 
-        cont = bpy.context.area.type
-        print(str(cont))
-
         self.evaluateGene(self.gene, mytool)
-
-        cont = bpy.context.area.type
-        print(str(cont))
-
-        # bpy.ops.object.delete()
-        # bpy.ops.object.select_all(action='DESELECT')
-
-        print("klaar")
-
-        # bpy.context.collection.objects.link(temp)
-        # bpy.data.objects.new(temp.name, temp)
-        # bpy.data.objects[0].select_set(True)
-        # print(bpy.data.objects)
-
-        # print(vars(bpy.context.scene.objects[0]))
-        # for obj in bpy.context.scene.objects:
-        # print(obj.name)
-
-        ##I MADE A START FOR YOU TO GET URSELF UNDERWAY
-        # iter = 1
-        # for i in range(iter):
-        #     #remove some object from the structure
-        #     #INSERT CODE HERE
-        #
-        #     #calculate the physics using the function i made for u
-        #     calc_physics(mytool)
-        #
-        #     #goto the last frame
-        #     bpy.context.scene.frame_set(previous_keyframe)
-        #
-        #     #and evaluate
-        #     hard_max_radius = 100 #fill these in yourself
-        #     hard_max_height = 100 #fill these in yourself
-        #     r,h = evaluate_demolition(scene, hard_max_radius, hard_max_height)
-        #
-        #     #Do some genetic algorithm magic
-        #     #INSERT CODE HERE
-        #
-        #     #add the removed object back again
-        #     #INSERT CODE HERE
-        #
-
-        # bpy.ops.object.select_all(action='DESELECT')
-        # bpy.context.view_layer.objects.active = None
 
         return {'FINISHED'}
 
@@ -387,16 +352,13 @@ class DEMOLITION_OT_reset(bpy.types.Operator):
     bl_idname = "demolition.op_reset"
 
     def execute(self, context):
-        cont = bpy.context.area.type
-        print(str(cont))
-
         scene = context.scene
         mytool = scene.my_tool
 
         bpy.ops.screen.animation_cancel()
         bpy.ops.object.select_all(action='DESELECT')
 
-        removeAllProperties()
+        removeObjectProperties(object_names);
 
         return {'FINISHED'}
 
@@ -419,4 +381,6 @@ def unregister():
 
 
 if __name__ == "__main__":
+    initObjectNames()
+    addMaterialProperties("ground.000", materials["ground"])
     register()
