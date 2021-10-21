@@ -89,7 +89,16 @@ def find_closest_object(this_obj):
 
 # before executing this script. MAKE SURE YOUR BUILD IS CENTERED AROUND ITS ORIGIN.
 # otherwise the evaluation might not work properly
-def evaluate_demolition(imploded_objects, hard_max_radius, hard_max_height, hard_max_imploded_objects):
+def evaluate_demolition(imploded_objects, hard_max_imploded_objects, hard_max_radius, hard_max_height=50):
+    """
+    evaluates the demolition of the current selected frame
+
+    :param imploded_objects: number of objects that were removed in the simulation
+    :param hard_max_imploded_objects: maximum number of objects that can be removed in the simulation
+    :param hard_max_radius: maximum demolition radius.
+    :param hard_max_height: maximum height of the building (default is the height of the building aka 50 meters)
+    :return: the resulting evaluation between [0,1]
+    """
     max_radius = 0
     max_height = 0
     for obj in bpy.context.scene.objects:
