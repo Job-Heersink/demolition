@@ -46,10 +46,6 @@ def calc_physics(mytool):
     bpy.context.scene.frame_end = 300
     bpy.ops.ptcache.bake_all(bake=True)
 
-# linear function
-def eval(x):
-    return x if x >= 0 and x <= 1 else 0
-
 def find_position_sides(obj):  # TODO test this for actual rotation
     xRot = obj.rotation_euler[0]
     yRot = obj.rotation_euler[1]
@@ -93,7 +89,7 @@ def find_closest_object(this_obj):
 
 # before executing this script. MAKE SURE YOUR BUILD IS CENTERED AROUND ITS ORIGIN.
 # otherwise the evaluation might not work properly
-def evaluate_demolition(scene, hard_max_radius, hard_max_height):
+def evaluate_demolition(imploded_objects, hard_max_radius, hard_max_height, hard_max_imploded_objects):
     max_radius = 0
     max_height = 0
     for obj in bpy.context.scene.objects:
@@ -106,18 +102,12 @@ def evaluate_demolition(scene, hard_max_radius, hard_max_height):
                 max_radius = max(sqrt(loc[0] ** 2 + loc[1] ** 2),
                                  max_radius)  # todo: this treats the center of an object as its location, but in reality we want to check its edges
 
-    # print(f"max radius {max_radius}")
-    # print(f"max height {max_height}")
-    # print(f"hard max radius {hard_max_radius}")
-    # print(f"hard max height {hard_max_height}")
-    # radius_eval = eval(max_radius / (hard_max_radius * 2))
-    # height_eval = eval(max_height / (hard_max_height * 2))
-    #
-    # print(f"eval radius {radius_eval}")
-    # print(f"eval height {height_eval}")
-    #
-    # return radius_eval, height_eval
-    return max_height, max_radius
+    r_norm = max_radius / hard_max_radius
+    h_norm = max_height / hard_max_height
+    d_norm = imploded_objects / hard_max_imploded_objects
+
+    result = ((1-r_norm)+(1-h_norm)**3+(1-d_norm))/3
+    return result
 
 def addMaterialProperties(object_name, mat):
     obj = bpy.context.scene.objects[object_name]
