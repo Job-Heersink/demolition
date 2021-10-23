@@ -3,6 +3,7 @@ import sys
 import time
 from random import seed
 from random import randint
+from random import random
 from math import radians, sqrt, cos, sin
 from mathutils import Matrix, Vector
 
@@ -15,13 +16,16 @@ materials = {#"concrete": {"type": "ACTIVE", "density": 7500, "friction": 0.7,"c
              "dish": {"type": "ACTIVE", "density": 2710, "friction": 1.4,"collision_shape": "CONVEX_HULL"},
              "ground": {"type": "PASSIVE", "friction": 1}}
 
-object_names = []
 max_gene_size = 15
 gene_pool_size = 2
-gene_pool = []
-gene_fitness = []
+gene_pool = [[]] * gene_pool_size
+gene_fitness = [0] * gene_pool_size
 generation = 0
 
+accept_new_block = 0.6
+mutation_rate = 0.6
+
+object_names = []
 displayed_demolition = []
 
 def initObjectNames():
@@ -124,9 +128,6 @@ def addMaterialProperties(object_name, mat):
     bpy.context.view_layer.objects.active = obj
 
     bpy.ops.rigidbody.object_add(type=mat["type"] if mat["type"] else "ACTIVE")
-    # if "collision_shape" in mat:
-    #     bpy.ops.rigidbody.shape_change(type=mat["collision_shape"])
-    # else:
     bpy.ops.rigidbody.shape_change(type='CONVEX_HULL')
     bpy.ops.object.modifier_add(type='COLLISION')
 
@@ -210,15 +211,43 @@ def removeObjectProperties(obj_names):
 
     bpy.ops.object.select_all(action='DESELECT')
 
-def initGenes():
-    for gene_idx in range(0, gene_pool_size):
-        gene = []
-        for idx in range(0, max_gene_size):
+def randomGene():
+    gene = []
+    for idx in range(0, max_gene_size):
+        if random() > accept_new_block:
             objIdx = randint(0, len(object_names) - 1)
             if objIdx not in gene:
                 gene.append(objIdx)
+    return gene
 
-        gene_pool.append(gene)
+def crossover(parent1, parent2):
+    gene = []
+    maxSize = max(len(parent1), len(parent2))
+    for idx in range(0, maxSize):
+        if random() < 0.5:
+            if idx < len(parent1):
+                gene.append(parent1[idx])
+        else:
+            if idx < len(parent2):
+                gene.append(parent2[idx])
+    return gene
+
+def randomMutations(gene):
+    newGene = []
+    for idx in range(0, len(gene)):
+        if random() < mutation_rate:
+            while True:
+                objIdx = randint(0, len(object_names) - 1)
+                if objIdx not in newGene and objIdx not in gene:
+                    newGene.append(objIdx)
+                    break
+        else:
+            newGene.append(gene[idx])
+    return newGene
+
+def initGenes():
+    for gene_idx in range(0, gene_pool_size):
+        gene_pool[gene_idx] = randomGene()
 
 def mutateGenes():
     initGenes()
@@ -230,10 +259,8 @@ def calculateSetup(setupIdxs, mytool):
         bpy.context.scene.objects[object_names[idx]].location += Vector((0.0, 0.0, -50.0))
         obj_names.remove(object_names[idx])
 
-    print("going for object properties")
     setObjectProperties(obj_names, mytool.dem_threshold_float);
 
-    print("calc physics")
     calc_physics(mytool)
 
 def resetSetup(setupIdxs):
@@ -254,15 +281,8 @@ def evaluateGene(gene, context):
 
     calculateSetup(gene, scene.my_tool)
 
-    time.sleep(10)
     bpy.context.scene.frame_set(frame = 198)
-    radius, height = evaluate_demolition(scene, 5, 1)
-    score = radius + height + len(gene)
-
-    print("radius: " + str(radius))
-    print("height: " + str(height))
-    print("gene_size: " + str(len(gene)))
-    print("score: " + str(score))
+    score = evaluate_demolition(len(gene), max_gene_size, 50, 5)
 
     resetSetup(gene)
 
@@ -327,22 +347,24 @@ class DEMOLITION_OT_start(bpy.types.Operator):
         scene = context.scene
         mytool = scene.my_tool
 
-        print(str(len(gene_fitness)))
+        global displayed_demolition
+        if len(displayed_demolition) == 0:
+            bpy.context.scene.frame_set(frame = 0)
+            bpy.ops.object.select_all(action='DESELECT')
+            best_score = 10000
+            index = -1
+            for idx in range(0, len(gene_fitness)):
+                if (best_score > gene_fitness[idx]):
+                    best_score = gene_fitness[idx]
+                    index = idx
 
-        bpy.ops.object.select_all(action='DESELECT')
-        best_score = 10000
-        index = -1
-        for idx in range(0, len(gene_fitness)):
-            if (best_score > gene_fitness[idx]):
-                best_score = gene_fitness[idx]
-                index = idx
+            # otherwise there is no good score
+            assert(index != -1)
 
-        # otherwise there is no good score
-        assert(index != -1)
+            displayed_demolition = gene_pool[index].copy()
 
-        displayed_demolition = gene_pool[index].copy()
+            calculateSetup(displayed_demolition, mytool)
 
-        calculateSetup(displayed_demolition)
 
         bpy.ops.screen.animation_play()
 
@@ -354,15 +376,11 @@ class DEMOLITION_OT_stop(bpy.types.Operator):
     bl_idname = "demolition.op_stop"
 
     def execute(self, context):
-        assert(len(displayed_demolition) != 0)
-
         scene = context.scene
         mytool = scene.my_tool
 
         bpy.ops.screen.animation_cancel()
         bpy.ops.object.select_all(action='DESELECT')
-
-        resetSetup(displayed_demolition)
 
         return {'FINISHED'}
 
@@ -373,19 +391,25 @@ class DEMOLITION_OT_genetic(bpy.types.Operator):
 
 
     def execute(self, context):
+        bpy.context.scene.frame_set(frame = 0)
+        global displayed_demolition
         if len(displayed_demolition) != 0:
+            bpy.ops.screen.animation_cancel()
+            bpy.ops.object.select_all(action='DESELECT')
             resetSetup(displayed_demolition)
-
-        gene_fitness = []
+            displayed_demolition = []
 
         if generation == 0:
             initGenes()
         else:
             mutateGenes()
 
-        for gene in gene_pool:
-            fitness = evaluateGene(gene, context)
-            gene_fitness.append(fitness)
+        global gene_fitness
+
+        for idx in range(0, gene_pool_size):
+            print("evaluating gene " + str(idx))
+            gene_fitness[idx] = evaluateGene(gene_pool[idx], context)
+
 
         print("gene scores:")
         for fitness in gene_fitness:
