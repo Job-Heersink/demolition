@@ -17,13 +17,13 @@ materials = {#"concrete": {"type": "ACTIVE", "density": 7500, "friction": 0.7,"c
              "ground": {"type": "PASSIVE", "friction": 1}}
 
 max_gene_size = 15
-gene_pool_size = 2
+gene_pool_size = 4
 gene_pool = [[]] * gene_pool_size
 gene_fitness = [0] * gene_pool_size
 generation = 0
 
 accept_new_block = 0.6
-mutation_rate = 0.6
+mutation_rate = 0.35
 
 object_names = []
 displayed_demolition = []
@@ -250,7 +250,32 @@ def initGenes():
         gene_pool[gene_idx] = randomGene()
 
 def mutateGenes():
-    initGenes()
+    scoreDict = {}
+    for idx in range(0, len(gene_fitness)):
+        scoreDict[idx] = gene_fitness[idx]
+
+    sortedDict =  sorted(scoreDict.items(), key=lambda item: item[1])
+    parent1 = gene_pool[sortedDict[0][0]]
+    parent2 = gene_pool[sortedDict[1][0]]
+
+    newGenes = []
+    for x in range(0, gene_pool_size // 2):
+        newGene = crossover(parent1, parent2)
+        if x % 2:
+            newGene = randomMutations(newGene)
+        newGenes.append(newGene)
+
+    for x in range(0, gene_pool_size // 4):
+        newGenes.append(randomGene())
+
+    for x in range(0, gene_pool_size // 4):
+        if x % 2:
+            newGenes.append(randomMutations(parent1))
+        else:
+            newGenes.append(randomMutations(parent2))
+
+    return newGenes
+
 
 def calculateSetup(setupIdxs, mytool):
     obj_names = object_names.copy()
@@ -288,6 +313,37 @@ def evaluateGene(gene, context):
 
     return score
 
+def runGeneration(context):
+    global generation
+    print("run generation " + str(generation))
+    if generation == 0:
+        initGenes()
+    else:
+        mutateGenes()
+
+    global gene_fitness
+
+    for idx in range(0, gene_pool_size):
+        print("evaluating gene " + str(idx))
+        gene_fitness[idx] = evaluateGene(gene_pool[idx], context)
+
+    generation += 1
+
+    # print results
+    avg_score = 0
+    min_score = 1
+    print("gene scores:")
+    for fitness in gene_fitness:
+        min_score = min (min_score, fitness)
+        avg_score += fitness
+        print(fitness)
+
+    avg_score = avg_score / len(gene_fitness)
+
+    print("avg: " + str(avg_score))
+    print("min: " + str(min_score))
+
+
 # define the sliders of the UI window
 class MyProperties(bpy.types.PropertyGroup):
     dem_threshold_float: bpy.props.FloatProperty(name="Breaking threshold", soft_min=0, soft_max=50, default=10,
@@ -313,8 +369,6 @@ class DEMOLITION_PT_main_panel(bpy.types.Panel):
         mytool = scene.my_tool
 
         layout.label(text="parameters")
-        # layout.operator("demolition.op_initialize")
-        # layout.operator("demolition.op_reset")
         layout.prop(mytool, "dem_threshold_float")
         layout.label(text="animation")
         layout.prop(mytool, "dem_substeps_float")
@@ -322,22 +376,10 @@ class DEMOLITION_PT_main_panel(bpy.types.Panel):
         layout.prop(mytool, "dem_speed_float")
         layout.label(text="find optimal demolition")
         layout.operator("demolition.op_genetic")
+        layout.operator("demolition.op_genetic_round")
+        layout.label(text="control animation")
         layout.operator("demolition.op_start")
         layout.operator("demolition.op_stop")
-
-
-class DEMOLITION_OT_initialize(bpy.types.Operator):
-    bl_label = "Initialize"
-    bl_idname = "demolition.op_initialize"
-
-    def execute(self, context):
-        scene = context.scene
-        mytool = scene.my_tool
-
-        setObjectProperties(object_names, mytool.dem_threshold_float)
-
-        return {'FINISHED'}
-
 
 class DEMOLITION_OT_start(bpy.types.Operator):
     bl_label = "Run best model"
@@ -379,15 +421,15 @@ class DEMOLITION_OT_stop(bpy.types.Operator):
         scene = context.scene
         mytool = scene.my_tool
 
-        bpy.ops.screen.animation_cancel()
+        bpy.ops.screen.animation_cancel(restore_frame=False)
         bpy.ops.object.select_all(action='DESELECT')
 
         return {'FINISHED'}
 
 
-class DEMOLITION_OT_genetic(bpy.types.Operator):
-    bl_label = "Genetic algorithm"
-    bl_idname = "demolition.op_genetic"
+class DEMOLITION_OT_genetic_round(bpy.types.Operator):
+    bl_label = "Genetic Round"
+    bl_idname = "demolition.op_genetic_round"
 
 
     def execute(self, context):
@@ -399,44 +441,33 @@ class DEMOLITION_OT_genetic(bpy.types.Operator):
             resetSetup(displayed_demolition)
             displayed_demolition = []
 
-        if generation == 0:
-            initGenes()
-        else:
-            mutateGenes()
-
-        global gene_fitness
-
-        for idx in range(0, gene_pool_size):
-            print("evaluating gene " + str(idx))
-            gene_fitness[idx] = evaluateGene(gene_pool[idx], context)
-
-
-        print("gene scores:")
-        for fitness in gene_fitness:
-            print(fitness)
+        runGeneration(context)
 
         return {'FINISHED'}
 
 
-class DEMOLITION_OT_reset(bpy.types.Operator):
-    bl_label = "Reset"
-    bl_idname = "demolition.op_reset"
+class DEMOLITION_OT_genetic(bpy.types.Operator):
+    bl_label = "Genetic algorithm"
+    bl_idname = "demolition.op_genetic"
 
     def execute(self, context):
-        scene = context.scene
-        mytool = scene.my_tool
+        bpy.context.scene.frame_set(frame = 0)
+        global displayed_demolition
+        if len(displayed_demolition) != 0:
+            bpy.ops.screen.animation_cancel()
+            bpy.ops.object.select_all(action='DESELECT')
+            resetSetup(displayed_demolition)
+            displayed_demolition = []
 
-        bpy.ops.screen.animation_cancel()
-        bpy.ops.object.select_all(action='DESELECT')
-
-        removeObjectProperties(object_names);
+        for x in range(0, 10):
+            runGeneration(context)
 
         return {'FINISHED'}
 
 
 # required blender specific functions
-classes = [MyProperties, DEMOLITION_PT_main_panel, DEMOLITION_OT_start, DEMOLITION_OT_stop, DEMOLITION_OT_initialize,
-           DEMOLITION_OT_reset, DEMOLITION_OT_genetic]
+classes = [MyProperties, DEMOLITION_PT_main_panel, DEMOLITION_OT_start, DEMOLITION_OT_stop,
+           DEMOLITION_OT_genetic, DEMOLITION_OT_genetic_round]
 
 
 def register():
