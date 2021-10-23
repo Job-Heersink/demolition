@@ -17,6 +17,7 @@ materials = {#"concrete": {"type": "ACTIVE", "density": 7500, "friction": 0.7,"c
              "ground": {"type": "PASSIVE", "friction": 1}}
 
 max_gene_size = 15
+# pool_size must be a mutiple of 4 due to function mutateGenes()
 gene_pool_size = 4
 gene_pool = [[]] * gene_pool_size
 gene_fitness = [0] * gene_pool_size
@@ -47,7 +48,7 @@ def calc_physics(mytool):
     bpy.context.scene.rigidbody_world.substeps_per_frame = int(mytool.dem_substeps_float)
     bpy.context.scene.rigidbody_world.solver_iterations = int(mytool.dem_solver_iter_float)
     bpy.context.scene.frame_start = 1
-    bpy.context.scene.frame_end = 300
+    bpy.context.scene.frame_end = 200
     bpy.ops.ptcache.bake_all(bake=True)
 
 def find_position_sides(obj):  # TODO test this for actual rotation
