@@ -17,7 +17,7 @@ materials = {
     "dish": {"type": "ACTIVE", "density": 2710, "friction": 1.4, "collision_shape": "CONVEX_HULL"},
     "ground": {"type": "PASSIVE", "friction": 1}}
 
-max_gene_size = 15
+max_gene_size = 30
 # pool_size must be a mutiple of 4 due to function mutateGenes()
 gene_pool_size = 4
 gene_pool = [[]] * gene_pool_size
@@ -27,22 +27,15 @@ generation = 0
 accept_new_block = 0.6
 mutation_rate = 0.35
 
-object_names = []
+hinge_set = []
 displayed_demolition = []
+physics_added = False
 
 
-def init_object_names():
-    for obj in bpy.context.scene.objects:
-        if obj.name.startswith("dish"):
-            object_names.append(obj.name)
-
-    for obj in bpy.context.scene.objects:
-        if obj.name.startswith("metal"):
-            object_names.append(obj.name)
-
+def init_hinge_set():
     for obj in bpy.context.scene.objects:
         if obj.name.startswith("hinge"):
-            object_names.append(obj.name)
+            hinge_set.append(obj.name)
 
 
 def calc_physics(mytool):
@@ -124,8 +117,50 @@ def evaluate_demolition(imploded_objects, hard_max_imploded_objects, hard_max_ra
     h_norm = max_height / hard_max_height
     d_norm = imploded_objects / hard_max_imploded_objects
 
+    print(f"r_norm {r_norm}")
+    print(f"h_norm {h_norm}")
+    print(f"d_norm {d_norm}")
+
     result = ((1 - r_norm) + (1 - h_norm) ** 3 + (1 - d_norm)) / 3
     return result
+
+
+def add_physics_all_object(breaking_threshold):
+    global physics_added
+    for obj in bpy.context.scene.objects:
+        bpy.ops.object.select_all(action='DESELECT')
+        for m_key in materials:
+            if obj.name.startswith(m_key):
+                add_material_properties(obj.name, materials[m_key])
+                break
+        bpy.ops.object.select_all(action='DESELECT')
+
+    for obj in bpy.context.scene.objects:
+        bpy.ops.object.select_all(action='DESELECT')
+        if obj.name.startswith("hinge"):
+            add_hinge_properties(obj.name, breaking_threshold)
+
+        bpy.ops.object.select_all(action='DESELECT')
+
+    physics_added = True
+
+
+def remove_physics_all_object():
+    global physics_added
+    for obj in bpy.context.scene.objects:
+        bpy.ops.object.select_all(action='DESELECT')
+        for m_key in materials:
+            if obj.name.startswith(m_key):
+                remove_material_properties(obj.name)
+                break
+
+    for obj in bpy.context.scene.objects:
+        bpy.ops.object.select_all(action='DESELECT')
+        if obj.name.startswith("hinge"):
+            remove_hinge_properties(obj.name)
+        bpy.ops.object.select_all(action='DESELECT')
+
+    physics_added = False
 
 
 def add_material_properties(object_name, mat):
@@ -163,7 +198,7 @@ def add_hinge_properties(object_name, breaking_threshold):
     next_paired_obj = find_closest_object(obj)
     if next_paired_obj is not None:
         bpy.context.object.rigid_body_constraint.object2 = next_paired_obj
-    bpy.context.object.rigid_body_constraint.breaking_threshold = breaking_threshold  # TODO: breaking threshold
+    bpy.context.object.rigid_body_constraint.breaking_threshold = breaking_threshold
 
     obj.select_set(False)
     bpy.context.view_layer.objects.active = None
@@ -192,42 +227,11 @@ def remove_hinge_properties(object_name):
     bpy.context.view_layer.objects.active = None
 
 
-# assumes that the obj_names are sorted such that all hinges are at the back
-# of the list
-def set_object_properties(obj_names, breaking_threshold):
-    bpy.ops.object.select_all(action='DESELECT')
-    for object_name in obj_names:
-        if object_name.startswith("dis"):
-            add_material_properties(object_name, materials["dish"])
-        elif object_name.startswith("metal"):
-            add_material_properties(object_name, materials["metal"])
-        else:
-            add_hinge_properties(object_name, breaking_threshold)
-
-    bpy.ops.object.select_all(action='DESELECT')
-
-
-# assumes that the obj_names are sorted such that all hinges are at the front
-# of the list
-def remove_object_properties(obj_names):
-    bpy.ops.object.select_all(action='DESELECT')
-
-    for object_name in obj_names:
-        if object_name.startswith("dish"):
-            remove_material_properties(object_name)
-        elif object_name.startswith("metal"):
-            remove_material_properties(object_name)
-        else:
-            remove_hinge_properties(object_name)
-
-    bpy.ops.object.select_all(action='DESELECT')
-
-
 def random_gene():
     gene = []
     for idx in range(0, max_gene_size):
         if random() > accept_new_block:
-            obj_idx = randint(0, len(object_names) - 1)
+            obj_idx = randint(0, len(hinge_set) - 1)
             if obj_idx not in gene:
                 gene.append(obj_idx)
     return gene
@@ -251,7 +255,7 @@ def random_mutations(gene):
     for idx in range(0, len(gene)):
         if random() < mutation_rate:
             while True:
-                obj_idx = randint(0, len(object_names) - 1)
+                obj_idx = randint(0, len(hinge_set) - 1)
                 if obj_idx not in new_gene and obj_idx not in gene:
                     new_gene.append(obj_idx)
                     break
@@ -293,40 +297,27 @@ def mutate_genes():
     return new_genes
 
 
-def calculate_setup(setup_idxs, my_tool):
-    obj_names = object_names.copy()
-
-    for idx in setup_idxs:
-        bpy.context.scene.objects[object_names[idx]].location += Vector((0.0, 0.0, -50.0))
-        obj_names.remove(object_names[idx])
-
-    set_object_properties(obj_names, my_tool.dem_threshold_float)
-
-    calc_physics(my_tool)
+def remove_physics_hinge(hinge_idxs):
+    for i in hinge_idxs:
+        remove_hinge_properties(hinge_set[i])
 
 
-def reset_setup(setup_idxs):
-    obj_names = object_names.copy()
-
-    for idx in setup_idxs:
-        obj_names.remove(object_names[idx])
-
-    obj_names.reverse()
-    remove_object_properties(obj_names)
-
-    for idx in setup_idxs:
-        bpy.context.scene.objects[object_names[idx]].location += Vector((0.0, 0.0, 50.0))
+def add_physics_hinge(hinge_idxs, my_tool):
+    for i in hinge_idxs:
+        add_hinge_properties(hinge_set[i], my_tool.dem_threshold_float)
 
 
 def evaluate_gene(gene, context):
     scene = context.scene
 
-    calculate_setup(gene, scene.my_tool)
+    bpy.context.scene.frame_set(frame=0)
+    remove_physics_hinge(gene)
+    calc_physics(scene.my_tool)
 
     bpy.context.scene.frame_set(frame=198)
-    score = evaluate_demolition(len(gene), max_gene_size, 50, 5)
+    score = evaluate_demolition(len(gene), max_gene_size, 50)
 
-    reset_setup(gene)
+    add_physics_hinge(gene, scene.my_tool)
 
     return score
 
@@ -423,8 +414,9 @@ class DEMOLITION_OT_start(bpy.types.Operator):
 
             displayed_demolition = gene_pool[index].copy()
 
-            calculate_setup(displayed_demolition, mytool)
+            remove_physics_hinge(displayed_demolition)
 
+        calc_physics(mytool)
         bpy.ops.screen.animation_play()
 
         return {'FINISHED'}
@@ -440,6 +432,7 @@ class DEMOLITION_OT_stop(bpy.types.Operator):
 
         bpy.ops.screen.animation_cancel(restore_frame=False)
         bpy.ops.object.select_all(action='DESELECT')
+        #add_physics_hinge(displayed_demolition, mytool)
 
         return {'FINISHED'}
 
@@ -449,13 +442,21 @@ class DEMOLITION_OT_genetic_round(bpy.types.Operator):
     bl_idname = "demolition.op_genetic_round"
 
     def execute(self, context):
-        bpy.context.scene.frame_set(frame=0)
         global displayed_demolition
+        global physics_added
+
+        scene = context.scene
+        mytool = scene.my_tool
+
+        bpy.context.scene.frame_set(frame=0)
         if len(displayed_demolition) != 0:
             bpy.ops.screen.animation_cancel()
             bpy.ops.object.select_all(action='DESELECT')
-            reset_setup(displayed_demolition)
+            add_physics_hinge(displayed_demolition, mytool)
             displayed_demolition = []
+
+        if not physics_added:
+            add_physics_all_object(mytool.dem_threshold_float)
 
         run_generation(context)
 
@@ -467,13 +468,20 @@ class DEMOLITION_OT_genetic(bpy.types.Operator):
     bl_idname = "demolition.op_genetic"
 
     def execute(self, context):
-        bpy.context.scene.frame_set(frame=0)
+        global physics_added
         global displayed_demolition
+
+        scene = context.scene
+        mytool = scene.my_tool
+        bpy.context.scene.frame_set(frame=0)
         if len(displayed_demolition) != 0:
             bpy.ops.screen.animation_cancel()
             bpy.ops.object.select_all(action='DESELECT')
-            reset_setup(displayed_demolition)
+            add_physics_hinge(displayed_demolition, mytool)
             displayed_demolition = []
+
+        if not physics_added:
+            add_physics_all_object(mytool.dem_threshold_float)
 
         for x in range(0, 10):
             run_generation(context)
@@ -500,6 +508,6 @@ def unregister():
 
 if __name__ == "__main__":
     seed(1)
-    init_object_names()
+    init_hinge_set()
     add_material_properties("ground.000", materials["ground"])
     register()
