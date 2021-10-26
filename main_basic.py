@@ -72,8 +72,16 @@ def find_closest_object(this_obj):
 
 # before executing this script. MAKE SURE YOUR BUILD IS CENTERED AROUND ITS ORIGIN.
 # otherwise the evaluation might not work properly
+def evaluate_demolition(imploded_objects, hard_max_imploded_objects, hard_max_radius, hard_max_height=50):
+    """
+    evaluates the demolition of the current selected frame
 
-def evaluate_demolition(scene, hard_max_radius, hard_max_height):
+    :param imploded_objects: number of objects that were removed in the simulation
+    :param hard_max_imploded_objects: maximum number of objects that can be removed in the simulation
+    :param hard_max_radius: maximum demolition radius.
+    :param hard_max_height: maximum height of the building (default is the height of the building aka 50 meters)
+    :return: the resulting evaluation between [0,1]
+    """
     max_radius = 0
     max_height = 0
     for obj in bpy.context.scene.objects:
@@ -86,27 +94,30 @@ def evaluate_demolition(scene, hard_max_radius, hard_max_height):
                 max_radius = max(sqrt(loc[0] ** 2 + loc[1] ** 2),
                                  max_radius)  # todo: this treats the center of an object as its location, but in reality we want to check its edges
 
-    print(f"max radius {max_radius}")
-    print(f"max height {max_height}")
-    print(f"hard max radius {hard_max_radius}")
-    print(f"hard max height {hard_max_height}")
-    radius_eval = eval(max_radius / (hard_max_radius * 2))
-    height_eval = eval(max_height / (hard_max_height * 2))
+    r_norm = max_radius / hard_max_radius
+    h_norm = max_height / hard_max_height
+    d_norm = imploded_objects / hard_max_imploded_objects
 
-    print(f"eval radius {radius_eval}")
-    print(f"eval height {height_eval}")
+    print(f"r{max_radius}")
+    print(f"h {max_height}")
+    print(f"d {imploded_objects}")
+    print(f"r_norm {r_norm}")
+    print(f"h_norm {h_norm}")
+    print(f"d_norm {d_norm}")
 
-    return radius_eval, height_eval
+    result = ((1 - r_norm) + (1 - h_norm) ** 3 + (1 - d_norm)) / 3
+    return result
 
 
 # define the sliders of the UI window
 class MyProperties(bpy.types.PropertyGroup):
-    dem_threshold_float: bpy.props.FloatProperty(name="Breaking threshold", soft_min=0, soft_max=10000, default=5000,
+    dem_threshold_float: bpy.props.FloatProperty(name="Breaking threshold", soft_min=0, soft_max=10000, default=4000,
                                                  step=1)
-    dem_substeps_float: bpy.props.FloatProperty(name="Substeps Per Frame", soft_min=0, soft_max=100, default=10, step=1)
-    dem_solver_iter_float: bpy.props.FloatProperty(name="Solver Iterations", soft_min=0, soft_max=100, default=10,
+    dem_substeps_float: bpy.props.FloatProperty(name="Substeps Per Frame", soft_min=0, soft_max=100, default=30, step=1)
+    dem_solver_iter_float: bpy.props.FloatProperty(name="Solver Iterations", soft_min=0, soft_max=100, default=30,
                                                    step=1)
-    dem_speed_float: bpy.props.FloatProperty(name="Speed", soft_min=0, soft_max=10, default=1, step=0.1, precision=2)
+    dem_speed_float: bpy.props.FloatProperty(name="Speed", soft_min=0, soft_max=10, default=3, step=0.1, precision=2)
+    dem_removed_objects: bpy.props.IntProperty(name="Removed Objects", soft_min=0, soft_max=100, default=10)
 
 
 # initiate the UI panel
@@ -130,6 +141,7 @@ class DEMOLITION_PT_main_panel(bpy.types.Panel):
         layout.prop(mytool, "dem_substeps_float")
         layout.prop(mytool, "dem_solver_iter_float")
         layout.prop(mytool, "dem_speed_float")
+        layout.prop(mytool, "dem_removed_objects")
         layout.operator("demolition.op_start")
         layout.operator("demolition.op_stop")
         layout.label(text="find optimal demolition")
@@ -212,7 +224,8 @@ class DEMOLITION_OT_stop(bpy.types.Operator):
         scene = context.scene
         mytool = scene.my_tool
 
-        evaluate_demolition(scene, 5, 1)
+        bpy.context.scene.frame_set(99)
+        print(f"evaluation: {evaluate_demolition(mytool.dem_removed_objects, 100, 50)}")
 
         bpy.ops.screen.animation_cancel()
         bpy.ops.object.select_all(action='DESELECT')
