@@ -17,11 +17,12 @@ materials = {
     "dish": {"type": "ACTIVE", "density": 2710, "friction": 1.4, "collision_shape": "CONVEX_HULL"},
     "ground": {"type": "PASSIVE", "friction": 1}}
 
-max_gene_size = 30
-# pool_size must be a mutiple of 4 due to function mutateGenes()
-gene_pool_size = 4
-gene_pool = [[]] * gene_pool_size
-gene_fitness = [0] * gene_pool_size
+
+max_chromosome_size = 15
+# pool_size must be a mutiple of 4 due to function mutatechromosomes()
+chromosome_pool_size = 4
+chromosomes_idxs = [[]] * chromosome_pool_size
+chromosome_fitness = [0] * chromosome_pool_size
 generation = 0
 
 accept_new_block = 0.6
@@ -33,12 +34,30 @@ physics_added = False
 
 
 def init_hinge_set():
+    """
+    set the global hinge_set list to contain all the hinge object names
+    """
     for obj in bpy.context.scene.objects:
         if obj.name.startswith("hinge"):
             hinge_set.append(obj.name)
 
+def get_hinge_set_idx(hinge_name):
+    """
+    get the index of the hinge_name in the global hinge_set list
+
+    :param hinge_name: name of the index that is returned
+    :return: index of the hinge_name
+    """
+    for idx in range(0, len(hinge_set)):
+        if hinge_name == hinge_set[idx]:
+            return idx
+
+    return -1
 
 def calc_physics(mytool):
+    """
+    computes the animation of the current configuration.
+    """
     bpy.ops.ptcache.free_bake_all()
     bpy.context.scene.rigidbody_world.time_scale = mytool.dem_speed_float
     bpy.context.scene.rigidbody_world.substeps_per_frame = int(mytool.dem_substeps_float)
@@ -47,6 +66,29 @@ def calc_physics(mytool):
     bpy.context.scene.frame_end = 200
     bpy.ops.ptcache.bake_all(bake=True)
 
+def get_closest_hinges(hinge_idx):
+    """
+    computes the hinges close to the hinge of hinge_idx. These hinges should be
+    within a radius of 1 distance unit.
+
+    :param hinge_idx: idx of the hinge to consider
+    :return: a list with indexes of hinges close to the hinge with hinge_idx
+    """
+    hinge = bpy.context.scene.objects[hinge_set[hinge_idx]]
+
+    radius = 1
+    closest_hinges = []
+    for obj in bpy.context.scene.objects:
+        if obj.name.startswith("hinge"):
+            delta_x = hinge.matrix_world.translation[0] - obj.matrix_world.translation[0]
+            delta_y = hinge.matrix_world.translation[1] - obj.matrix_world.translation[1]
+            delta_z = hinge.matrix_world.translation[2] - obj.matrix_world.translation[2]
+
+            dist = sqrt(delta_x ** 2 + delta_y ** 2 + delta_z ** 2)
+            if dist < radius:
+                closest_hinges.append(get_hinge_set_idx(obj.name))
+
+    return closest_hinges
 
 def find_position_sides(obj):  # TODO test this for actual rotation
     x_rot = obj.rotation_euler[0]
@@ -227,74 +269,129 @@ def remove_hinge_properties(object_name):
     bpy.context.view_layer.objects.active = None
 
 
-def random_gene():
-    gene = []
-    for idx in range(0, max_gene_size):
+def random_chromosome():
+    """
+    Generates a random chromosome based on some global parameters. A chromosome
+    contains a number of hinge clusters(genes) that are removed from the
+    standard model.
+
+    :param max_chromosome_size: the maximum number of hinge clusters that are removed
+    :param accept_new_block: a threshold for which random block are accepted
+    :return: a chromosome, a list of hinge clusters.
+    """
+    chromosome = []
+    for idx in range(0, max_chromosome_size):
         if random() > accept_new_block:
+            not_in_chromosome = True
             obj_idx = randint(0, len(hinge_set) - 1)
-            if obj_idx not in gene:
-                gene.append(obj_idx)
-    return gene
+            for idxs in chromosome:
+                if obj_idx in idxs:
+                    not_in_chromosome = False
+
+            if not_in_chromosome:
+                chromosome.append(get_closest_hinges(obj_idx))
+
+    return chromosome
 
 
 def crossover(parent1, parent2):
-    gene = []
+    """
+    Generates a new chromosome based on the 2 parent chromosomes. It randomly
+    selects genes from the first or second parents and puts these together in
+    the new chromosome
+
+    :param parent1: first parent used in the crossover
+    :param parent2: second parent used in the crossover
+    :return: a new chromosome base on parent1 and parent2
+    """
+    chromosome = []
     max_size = max(len(parent1), len(parent2))
     for idx in range(0, max_size):
         if random() < 0.5:
             if idx < len(parent1):
-                gene.append(parent1[idx])
+                chromosome.append(parent1[idx])
         else:
             if idx < len(parent2):
-                gene.append(parent2[idx])
-    return gene
+                chromosome.append(parent2[idx])
+    return chromosome
 
 
-def random_mutations(gene):
-    new_gene = []
-    for idx in range(0, len(gene)):
+def random_mutations(chromosome):
+    """
+    Randomly mutates the input chromosome. By replacing a gene based on the
+    global parameter mutation_rate.
+
+    :param chromosome: chromosome that is mutated
+    :return: a new mutated chromosome based
+    """
+    new_chromosome = []
+    for idx in range(0, len(chromosome)):
         if random() < mutation_rate:
             while True:
                 obj_idx = randint(0, len(hinge_set) - 1)
-                if obj_idx not in new_gene and obj_idx not in gene:
-                    new_gene.append(obj_idx)
+                not_in_chromosome = True
+                for idxs in chromosome:
+                    if obj_idx in idxs:
+                        not_in_chromosome = False
+
+                if not_in_chromosome:
+                    chromosome.append(get_closest_hinges(obj_idx))
                     break
         else:
-            new_gene.append(gene[idx])
-    return new_gene
+            new_chromosome.append(chromosome[idx])
+    return new_chromosome
 
 
-def init_genes():
-    for gene_idx in range(0, gene_pool_size):
-        gene_pool[gene_idx] = random_gene()
+def init_chromosomes():
+    """
+    creates a pool of random chromosomes and saves them in the global parameter
+    chromosomes_idxs
+    """
+
+    for chromosome_idx in range(0, chromosome_pool_size):
+        chromosomes_idxs[chromosome_idx] = random_chromosome()
 
 
-def mutate_genes():
+def mutate_chromosomes():
+    """
+    This function will mutate the current pool of chromosomes. It has 4
+    different mutation strategies that all come up with an equal number of new
+    chromosomes.
+    1. Take the two best chromosomes in the pool and create children using the
+    crossover function.
+    2. Take the two best chromosomes in the pool and create children using the
+    crossover function but also perform random mutations on these children.
+    3. Create new random chromosomes
+    4. Use the two best chromosomes in the pool and mutate those.
+
+    The new chromosomes are saved in the global variable chromosomes_idxs.
+    """
+    global chromosomes_idxs
     score_dict = {}
-    for idx in range(0, len(gene_fitness)):
-        score_dict[idx] = gene_fitness[idx]
+    for idx in range(0, len(chromosome_fitness)):
+        score_dict[idx] = chromosome_fitness[idx]
 
     sorted_dict = sorted(score_dict.items(), key=lambda item: item[1])
-    parent1 = gene_pool[sorted_dict[0][0]]
-    parent2 = gene_pool[sorted_dict[1][0]]
+    parent1 = chromosomes_idxs[sorted_dict[0][0]]
+    parent2 = chromosomes_idxs[sorted_dict[1][0]]
 
-    new_genes = []
-    for x in range(0, gene_pool_size // 2):
-        new_gene = crossover(parent1, parent2)
+    new_chromosomes = []
+    for x in range(0, chromosome_pool_size // 2):
+        new_chromosome = crossover(parent1, parent2)
         if x % 2:
-            new_gene = random_mutations(new_gene)
-        new_genes.append(new_gene)
+            new_chromosome = random_mutations(new_chromosome)
+        new_chromosomes.append(new_chromosome)
 
-    for x in range(0, gene_pool_size // 4):
-        new_genes.append(random_gene())
+    for x in range(0, chromosome_pool_size // 4):
+        new_chromosomes.append(random_chromosome())
 
-    for x in range(0, gene_pool_size // 4):
+    for x in range(0, chromosome_pool_size // 4):
         if x % 2:
-            new_genes.append(random_mutations(parent1))
+            new_chromosomes.append(random_mutations(parent1))
         else:
-            new_genes.append(random_mutations(parent2))
+            new_chromosomes.append(random_mutations(parent2))
 
-    return new_genes
+    chromosomes_idxs = new_chromosomes
 
 
 def remove_physics_hinge(hinge_idxs):
@@ -307,47 +404,58 @@ def add_physics_hinge(hinge_idxs, my_tool):
         add_hinge_properties(hinge_set[i], my_tool.dem_threshold_float)
 
 
-def evaluate_gene(gene, context):
+def evaluate_chromosome(chromosome, context):
+    """
+    Runs the simulations of a single chromosome and evaluates it.
+
+    :param chromosome: the chromosome that is evaluated.
+    :return : The fitness score of the chromosome
+    """
     scene = context.scene
 
+    chromosome_1d = sum(chromosome, [])
+
     bpy.context.scene.frame_set(frame=0)
-    remove_physics_hinge(gene)
+    remove_physics_hinge(chromosome_1d)
     calc_physics(scene.my_tool)
 
     bpy.context.scene.frame_set(frame=198)
-    score = evaluate_demolition(len(gene), max_gene_size, 50)
+    score = evaluate_demolition(len(chromosome), max_chromosome_size, 50)
 
-    add_physics_hinge(gene, scene.my_tool)
+    add_physics_hinge(chromosome_1d, scene.my_tool)
 
     return score
 
 
 def run_generation(context):
+    """
+    Runs the simulations of a single generation of chromosomes and evaluates
+    those.
+    """
     global generation
     print("run generation " + str(generation))
     if generation == 0:
-        init_genes()
+        init_chromosomes()
     else:
-        mutate_genes()
+        mutate_chromosomes()
 
-    global gene_fitness
+    global chromosome_fitness
 
-    for idx in range(0, gene_pool_size):
-        print("evaluating gene " + str(idx))
-        gene_fitness[idx] = evaluate_gene(gene_pool[idx], context)
+    for idx in range(0, chromosome_pool_size):
+        chromosome_fitness[idx] = evaluate_chromosome(chromosomes_idxs[idx], context)
 
     generation += 1
 
     # print results
     avg_score = 0
     min_score = 1
-    print("gene scores:")
-    for fitness in gene_fitness:
+    print("chromosome scores:")
+    for fitness in chromosome_fitness:
         min_score = min(min_score, fitness)
         avg_score += fitness
         print(fitness)
 
-    avg_score = avg_score / len(gene_fitness)
+    avg_score = avg_score / len(chromosome_fitness)
 
     print("avg: " + str(avg_score))
     print("min: " + str(min_score))
@@ -355,7 +463,7 @@ def run_generation(context):
 
 # define the sliders of the UI window
 class MyProperties(bpy.types.PropertyGroup):
-    dem_threshold_float: bpy.props.FloatProperty(name="Breaking threshold", soft_min=0, soft_max=10000, default=5000,
+    dem_threshold_float: bpy.props.FloatProperty(name="Breaking threshold", soft_min=0, soft_max=10000, default=3000,
                                                  step=1)
     dem_substeps_float: bpy.props.FloatProperty(name="Substeps Per Frame", soft_min=0, soft_max=100, default=10, step=1)
     dem_solver_iter_float: bpy.props.FloatProperty(name="Solver Iterations", soft_min=0, soft_max=100, default=10,
@@ -404,15 +512,15 @@ class DEMOLITION_OT_start(bpy.types.Operator):
             bpy.ops.object.select_all(action='DESELECT')
             best_score = 10000
             index = -1
-            for idx in range(0, len(gene_fitness)):
-                if (best_score > gene_fitness[idx]):
-                    best_score = gene_fitness[idx]
+            for idx in range(0, len(chromosome_fitness)):
+                if (best_score > chromosome_fitness[idx]):
+                    best_score = chromosome_fitness[idx]
                     index = idx
 
             # otherwise there is no good score
             assert (index != -1)
 
-            displayed_demolition = gene_pool[index].copy()
+            displayed_demolition = sum(chromosomes_idxs[index].copy(), [])
 
             remove_physics_hinge(displayed_demolition)
 
