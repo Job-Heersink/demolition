@@ -18,7 +18,7 @@ materials = {
     "ground": {"type": "PASSIVE", "friction": 1}}
 
 
-max_chromosome_size = 15
+max_chromosome_size = 30
 # pool_size must be a mutiple of 4 due to function mutatechromosomes()
 chromosome_pool_size = 4
 chromosomes_idxs = [[]] * chromosome_pool_size
