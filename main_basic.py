@@ -72,10 +72,13 @@ def find_closest_object(this_obj):
 
 # before executing this script. MAKE SURE YOUR BUILD IS CENTERED AROUND ITS ORIGIN.
 # otherwise the evaluation might not work properly
-def evaluate_demolition(imploded_objects, hard_max_imploded_objects, hard_max_radius, hard_max_height=50):
+def evaluate_demolition(imploded_objects, w_r=3, w_h=3, w_d=1, hard_max_imploded_objects=100, hard_max_radius=50, hard_max_height=50):
     """
     evaluates the demolition of the current selected frame
 
+    :param w_d: weight factor for imploded objects
+    :param w_h: weight factor for height
+    :param w_r: weight factor for radius
     :param imploded_objects: number of objects that were removed in the simulation
     :param hard_max_imploded_objects: maximum number of objects that can be removed in the simulation
     :param hard_max_radius: maximum demolition radius.
@@ -97,6 +100,9 @@ def evaluate_demolition(imploded_objects, hard_max_imploded_objects, hard_max_ra
     r_norm = max_radius / hard_max_radius
     h_norm = max_height / hard_max_height
     d_norm = imploded_objects / hard_max_imploded_objects
+    r_norm = 1 if r_norm > 1 else r_norm
+    h_norm = 1 if h_norm > 1 else h_norm
+    d_norm = 1 if d_norm > 1 else d_norm
 
     print(f"r{max_radius}")
     print(f"h {max_height}")
@@ -105,7 +111,7 @@ def evaluate_demolition(imploded_objects, hard_max_imploded_objects, hard_max_ra
     print(f"h_norm {h_norm}")
     print(f"d_norm {d_norm}")
 
-    result = ((1 - r_norm) + (1 - h_norm) ** 3 + (1 - d_norm)) / 3
+    result = (w_r*(1 - r_norm) + w_h*(1 - h_norm) ** 3 + w_d*(1 - d_norm)) / (w_r+w_h+w_d)
     return result
 
 
@@ -225,7 +231,7 @@ class DEMOLITION_OT_stop(bpy.types.Operator):
         mytool = scene.my_tool
 
         bpy.context.scene.frame_set(99)
-        print(f"evaluation: {evaluate_demolition(mytool.dem_removed_objects, 100, 50)}")
+        print(f"evaluation: {evaluate_demolition(mytool.dem_removed_objects)}")
 
         bpy.ops.screen.animation_cancel()
         bpy.ops.object.select_all(action='DESELECT')
@@ -254,12 +260,12 @@ class DEMOLITION_OT_genetic(bpy.types.Operator):
             calc_physics(mytool)
 
             # goto the last frame
-            bpy.context.scene.frame_set(previous_keyframe)
+            #bpy.context.scene.frame_set(previous_keyframe)
 
             # and evaluate
             hard_max_radius = 100  # fill these in yourself
             hard_max_height = 100  # fill these in yourself
-            r, h = evaluate_demolition(scene, hard_max_radius, hard_max_height)
+            #r, h = evaluate_demolition(scene, hard_max_radius, hard_max_height)
 
             # Do some genetic algorithm magic
             # INSERT CODE HERE
