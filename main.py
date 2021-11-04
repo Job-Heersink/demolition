@@ -12,7 +12,6 @@ sys.path.append('/home/job/.local/lib/python3.7/site-packages')
 bpy.app.debug_wm = False
 
 materials = {
-    # "concrete": {"type": "ACTIVE", "density": 7500, "friction": 0.7,"collision_shape": "CONVEX_HULL"},  #TODO these values are not correct yet
     "metal": {"type": "ACTIVE", "density": 7500, "friction": 0.42, "collision_shape": "CYLINDER"},
     "dish": {"type": "ACTIVE", "density": 2710, "friction": 1.4, "collision_shape": "CONVEX_HULL"},
     "ground": {"type": "PASSIVE", "friction": 1}}
@@ -37,6 +36,7 @@ def init_hinge_set():
     """
     set the global hinge_set list to contain all the hinge object names
     """
+
     for obj in bpy.context.scene.objects:
         if obj.name.startswith("hinge"):
             hinge_set.append(obj.name)
@@ -48,6 +48,7 @@ def get_hinge_set_idx(hinge_name):
     :param hinge_name: name of the index that is returned
     :return: index of the hinge_name
     """
+
     for idx in range(0, len(hinge_set)):
         if hinge_name == hinge_set[idx]:
             return idx
@@ -58,6 +59,7 @@ def calc_physics(mytool):
     """
     computes the animation of the current configuration.
     """
+
     bpy.ops.ptcache.free_bake_all()
     bpy.context.scene.rigidbody_world.time_scale = mytool.dem_speed_float
     bpy.context.scene.rigidbody_world.substeps_per_frame = int(mytool.dem_substeps_float)
@@ -74,6 +76,7 @@ def get_closest_hinges(hinge_idx):
     :param hinge_idx: idx of the hinge to consider
     :return: a list with indexes of hinges close to the hinge with hinge_idx
     """
+
     hinge = bpy.context.scene.objects[hinge_set[hinge_idx]]
 
     radius = 1
@@ -90,7 +93,14 @@ def get_closest_hinges(hinge_idx):
 
     return closest_hinges
 
-def find_position_sides(obj):  # TODO test this for actual rotation
+def find_position_sides(obj):
+    """
+    find the position of the outermost ends of the object
+
+    :param obj: the object to find the sides for
+    :return: the location of the sides
+    """
+
     x_rot = obj.rotation_euler[0]
     y_rot = obj.rotation_euler[1]
     z_rot = obj.rotation_euler[2]
@@ -112,6 +122,13 @@ def find_position_sides(obj):  # TODO test this for actual rotation
 
 
 def find_closest_object(this_obj):
+    """
+    get the neurest neighbour of the given object
+
+    :param obj: the object to find the neighbour of
+    :return: the neighbouring object
+    """
+
     threshold = 1
     assert (this_obj.name.startswith("hinge"))
 
@@ -146,6 +163,7 @@ def evaluate_demolition(imploded_objects, w_r=3, w_h=3, w_d=1, hard_max_imploded
     :param hard_max_height: maximum height of the building (default is the height of the building aka 50 meters)
     :return: the resulting evaluation between [0,1]
     """
+
     max_radius = 0
     max_height = 0
     for obj in bpy.context.scene.objects:
@@ -156,7 +174,7 @@ def evaluate_demolition(imploded_objects, w_r=3, w_h=3, w_d=1, hard_max_imploded
                 loc = obj.matrix_world.translation
                 max_height = max(loc[2], max_height)
                 max_radius = max(sqrt(loc[0] ** 2 + loc[1] ** 2),
-                                 max_radius)  # todo: this treats the center of an object as its location, but in reality we want to check its edges
+                                 max_radius)
 
     r_norm = max_radius / hard_max_radius
     h_norm = max_height / hard_max_height
@@ -177,6 +195,12 @@ def evaluate_demolition(imploded_objects, w_r=3, w_h=3, w_d=1, hard_max_imploded
 
 
 def add_physics_all_object(breaking_threshold):
+    """
+    set the appropriate physics properties to each object in the scene
+
+    :param breaking_threshold: The threshold to which the hinges should break
+    """
+
     global physics_added
     for obj in bpy.context.scene.objects:
         bpy.ops.object.select_all(action='DESELECT')
@@ -197,6 +221,10 @@ def add_physics_all_object(breaking_threshold):
 
 
 def remove_physics_all_object():
+    """
+    removes the physics of all objects
+    """
+
     global physics_added
     for obj in bpy.context.scene.objects:
         bpy.ops.object.select_all(action='DESELECT')
@@ -215,6 +243,14 @@ def remove_physics_all_object():
 
 
 def add_material_properties(object_name, mat):
+    """
+    adds the appropriate physics properties to an object with name object_name according to its material,
+    which is specified in the name itself. If an object starts with the name 'metal' we will give it metal properties.
+
+    :param object_name: The name of the object to apply physics properties to.
+    :param mat: the material to apply to the object
+    """
+
     obj = bpy.context.scene.objects[object_name]
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
@@ -237,6 +273,13 @@ def add_material_properties(object_name, mat):
 
 
 def add_hinge_properties(object_name, breaking_threshold):
+    """
+    add physics properties to the given hinge
+
+    :param object_name: the hinge object
+    :param breaking_threshold: the breaking threshold of the hinge
+    """
+
     obj = bpy.context.scene.objects[object_name]
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
@@ -256,6 +299,12 @@ def add_hinge_properties(object_name, breaking_threshold):
 
 
 def remove_material_properties(object_name):
+    """
+    remove the physics properties of an object
+
+    :param object_name: name of the object
+    :return:
+    """
     obj = bpy.context.scene.objects[object_name]
     bpy.context.view_layer.objects.active = obj
     obj.select_set(True)
@@ -268,6 +317,12 @@ def remove_material_properties(object_name):
 
 
 def remove_hinge_properties(object_name):
+    """
+    remove the physics properties of a hinge
+
+    :param object_name: name of the hinge
+    :return:
+    """
     obj = bpy.context.scene.objects[object_name]
     bpy.context.view_layer.objects.active = obj
     obj.select_set(True)
@@ -507,6 +562,7 @@ class DEMOLITION_PT_main_panel(bpy.types.Panel):
         layout.operator("demolition.op_stop")
 
 
+# blender start button
 class DEMOLITION_OT_start(bpy.types.Operator):
     bl_label = "Run best model"
     bl_idname = "demolition.op_start"
@@ -539,6 +595,7 @@ class DEMOLITION_OT_start(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# blender stop button
 class DEMOLITION_OT_stop(bpy.types.Operator):
     bl_label = "Stop"
     bl_idname = "demolition.op_stop"
@@ -554,6 +611,7 @@ class DEMOLITION_OT_stop(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Genetic round button
 class DEMOLITION_OT_genetic_round(bpy.types.Operator):
     bl_label = "Genetic Round"
     bl_idname = "demolition.op_genetic_round"
@@ -580,6 +638,7 @@ class DEMOLITION_OT_genetic_round(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# genetic algorithm button
 class DEMOLITION_OT_genetic(bpy.types.Operator):
     bl_label = "Genetic algorithm"
     bl_idname = "demolition.op_genetic"
