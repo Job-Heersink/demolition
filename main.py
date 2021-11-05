@@ -518,9 +518,11 @@ def run_generation(context):
     # print results
     avg_score = 0
     min_score = 1
+    max_score = 0
     print("chromosome scores:")
     for fitness in chromosome_fitness:
         min_score = min(min_score, fitness)
+        max_score = max(max_score, fitness)
         avg_score += fitness
         print(fitness)
 
@@ -528,6 +530,7 @@ def run_generation(context):
 
     print("avg: " + str(avg_score))
     print("min: " + str(min_score))
+    print("max: " + str(max_score))
 
 
 # define the sliders of the UI window
@@ -613,8 +616,9 @@ class DEMOLITION_OT_stop(bpy.types.Operator):
         bpy.ops.screen.animation_cancel(restore_frame=False)
         bpy.ops.object.select_all(action='DESELECT')
 
-        global displayed_demolition
+        global displayed_demolition, hinge_set
         for idx in displayed_demolition:
+            print(hinge_set[idx])
             objectToSelect = bpy.data.objects[hinge_set[idx]]
             objectToSelect.select_set(True)
 
