@@ -19,7 +19,7 @@ materials = {
 
 max_chromosome_size = 10
 # pool_size must be a mutiple of 4 due to function mutatechromosomes()
-chromosome_pool_size = 4
+chromosome_pool_size = 12
 chromosomes_idxs = [[]] * chromosome_pool_size
 chromosome_fitness = [0] * chromosome_pool_size
 generation = 0
