@@ -65,7 +65,7 @@ def calc_physics(mytool):
     bpy.context.scene.rigidbody_world.substeps_per_frame = int(mytool.dem_substeps_float)
     bpy.context.scene.rigidbody_world.solver_iterations = int(mytool.dem_solver_iter_float)
     bpy.context.scene.frame_start = 1
-    bpy.context.scene.frame_end = 200
+    bpy.context.scene.frame_end = 100
     bpy.ops.ptcache.bake_all(bake=True)
 
 def get_closest_hinges(hinge_idx):
@@ -150,15 +150,15 @@ def find_closest_object(this_obj):
 
 # before executing this script. MAKE SURE YOUR BUILD IS CENTERED AROUND ITS ORIGIN.
 # otherwise the evaluation might not work properly
-def evaluate_demolition(imploded_objects, w_r=3, w_h=3, w_d=1, hard_max_imploded_objects=100, hard_max_radius=50, hard_max_height=50):
+def evaluate_demolition(removed_clusters, w_r=3, w_h=3, w_d=1, hard_max_removed_clusters=100, hard_max_radius=50, hard_max_height=50):
     """
     evaluates the demolition of the current selected frame
 
     :param w_d: weight factor for imploded objects
     :param w_h: weight factor for height
     :param w_r: weight factor for radius
-    :param imploded_objects: number of objects that were removed in the simulation
-    :param hard_max_imploded_objects: maximum number of objects that can be removed in the simulation
+    :param removed_clusters: number of objects that were removed in the simulation
+    :param hard_max_removed_clusters: maximum number of objects that can be removed in the simulation
     :param hard_max_radius: maximum demolition radius.
     :param hard_max_height: maximum height of the building (default is the height of the building aka 50 meters)
     :return: the resulting evaluation between [0,1]
@@ -178,14 +178,14 @@ def evaluate_demolition(imploded_objects, w_r=3, w_h=3, w_d=1, hard_max_imploded
 
     r_norm = max_radius / hard_max_radius
     h_norm = max_height / hard_max_height
-    d_norm = imploded_objects / hard_max_imploded_objects
+    d_norm = removed_clusters / hard_max_removed_clusters
     r_norm = 1 if r_norm > 1 else r_norm
     h_norm = 1 if h_norm > 1 else h_norm
     d_norm = 1 if d_norm > 1 else d_norm
 
     print(f"r{max_radius}")
     print(f"h {max_height}")
-    print(f"d {imploded_objects}")
+    print(f"d {removed_clusters}")
     print(f"r_norm {r_norm}")
     print(f"h_norm {h_norm}")
     print(f"d_norm {d_norm}")
@@ -256,7 +256,12 @@ def add_material_properties(object_name, mat):
     bpy.context.view_layer.objects.active = obj
 
     bpy.ops.rigidbody.object_add(type=mat["type"] if mat["type"] else "ACTIVE")
-    bpy.ops.rigidbody.shape_change(type='CONVEX_HULL')
+
+    if "collision_shape" in mat:
+        bpy.ops.rigidbody.shape_change(type=mat["collision_shape"])
+    else:
+        bpy.ops.rigidbody.shape_change(type='CONVEX_HULL')
+
     bpy.ops.object.modifier_add(type='COLLISION')
 
     if "density" in mat:
@@ -527,12 +532,12 @@ def run_generation(context):
 
 # define the sliders of the UI window
 class MyProperties(bpy.types.PropertyGroup):
-    dem_threshold_float: bpy.props.FloatProperty(name="Breaking threshold", soft_min=0, soft_max=10000, default=3000,
+    dem_threshold_float: bpy.props.FloatProperty(name="Breaking threshold", soft_min=0, soft_max=10000, default=4000,
                                                  step=1)
-    dem_substeps_float: bpy.props.FloatProperty(name="Substeps Per Frame", soft_min=0, soft_max=100, default=10, step=1)
-    dem_solver_iter_float: bpy.props.FloatProperty(name="Solver Iterations", soft_min=0, soft_max=100, default=10,
+    dem_substeps_float: bpy.props.FloatProperty(name="Substeps Per Frame", soft_min=0, soft_max=100, default=30, step=1)
+    dem_solver_iter_float: bpy.props.FloatProperty(name="Solver Iterations", soft_min=0, soft_max=100, default=30,
                                                    step=1)
-    dem_speed_float: bpy.props.FloatProperty(name="Speed", soft_min=0, soft_max=10, default=1, step=0.1, precision=2)
+    dem_speed_float: bpy.props.FloatProperty(name="Speed", soft_min=0, soft_max=10, default=3, step=0.1, precision=2)
 
 
 # initiate the UI panel
