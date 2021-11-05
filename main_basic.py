@@ -72,19 +72,20 @@ def find_closest_object(this_obj):
 
 # before executing this script. MAKE SURE YOUR BUILD IS CENTERED AROUND ITS ORIGIN.
 # otherwise the evaluation might not work properly
-def evaluate_demolition(imploded_objects, w_r=3, w_h=3, w_d=1, hard_max_imploded_objects=100, hard_max_radius=50, hard_max_height=50):
+def evaluate_demolition(removed_clusters, w_r=3, w_h=5, w_d=1, hard_max_removed_clusters=36, hard_max_radius=50, hard_max_height=50):
     """
     evaluates the demolition of the current selected frame
 
     :param w_d: weight factor for imploded objects
     :param w_h: weight factor for height
     :param w_r: weight factor for radius
-    :param imploded_objects: number of objects that were removed in the simulation
-    :param hard_max_imploded_objects: maximum number of objects that can be removed in the simulation
+    :param removed_clusters: number of objects that were removed in the simulation
+    :param hard_max_removed_clusters: maximum number of objects that can be removed in the simulation
     :param hard_max_radius: maximum demolition radius.
     :param hard_max_height: maximum height of the building (default is the height of the building aka 50 meters)
     :return: the resulting evaluation between [0,1]
     """
+
     max_radius = 0
     max_height = 0
     for obj in bpy.context.scene.objects:
@@ -95,18 +96,18 @@ def evaluate_demolition(imploded_objects, w_r=3, w_h=3, w_d=1, hard_max_imploded
                 loc = obj.matrix_world.translation
                 max_height = max(loc[2], max_height)
                 max_radius = max(sqrt(loc[0] ** 2 + loc[1] ** 2),
-                                 max_radius)  # todo: this treats the center of an object as its location, but in reality we want to check its edges
+                                 max_radius)
 
     r_norm = max_radius / hard_max_radius
     h_norm = max_height / hard_max_height
-    d_norm = imploded_objects / hard_max_imploded_objects
+    d_norm = removed_clusters / hard_max_removed_clusters
     r_norm = 1 if r_norm > 1 else r_norm
     h_norm = 1 if h_norm > 1 else h_norm
     d_norm = 1 if d_norm > 1 else d_norm
 
     print(f"r{max_radius}")
     print(f"h {max_height}")
-    print(f"d {imploded_objects}")
+    print(f"d {removed_clusters}")
     print(f"r_norm {r_norm}")
     print(f"h_norm {h_norm}")
     print(f"d_norm {d_norm}")
@@ -123,7 +124,7 @@ class MyProperties(bpy.types.PropertyGroup):
     dem_solver_iter_float: bpy.props.FloatProperty(name="Solver Iterations", soft_min=0, soft_max=100, default=30,
                                                    step=1)
     dem_speed_float: bpy.props.FloatProperty(name="Speed", soft_min=0, soft_max=10, default=3, step=0.1, precision=2)
-    dem_removed_objects: bpy.props.IntProperty(name="Removed Objects", soft_min=0, soft_max=100, default=10)
+    dem_removed_objects: bpy.props.IntProperty(name="Removed Clusters", soft_min=0, soft_max=36, default=4)
 
 
 # initiate the UI panel
