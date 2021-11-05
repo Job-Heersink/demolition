@@ -150,7 +150,7 @@ def find_closest_object(this_obj):
 
 # before executing this script. MAKE SURE YOUR BUILD IS CENTERED AROUND ITS ORIGIN.
 # otherwise the evaluation might not work properly
-def evaluate_demolition(removed_clusters, w_r=3, w_h=3, w_d=1, hard_max_removed_clusters=100, hard_max_radius=50, hard_max_height=50):
+def evaluate_demolition(removed_clusters, w_r=3, w_h=5, w_d=1, hard_max_removed_clusters=36, hard_max_radius=50, hard_max_height=50):
     """
     evaluates the demolition of the current selected frame
 
