@@ -12,14 +12,14 @@ sys.path.append('/home/job/.local/lib/python3.7/site-packages')
 bpy.app.debug_wm = False
 
 materials = {
-    "metal": {"type": "ACTIVE", "density": 7500, "friction": 0.42, "collision_shape": "CYLINDER"},
+    "metal": {"type": "ACTIVE", "density": 7500, "friction": 0.42, "collision_shape": "CONVEX_HULL"},
     "dish": {"type": "ACTIVE", "density": 2710, "friction": 1.4, "collision_shape": "CONVEX_HULL"},
     "ground": {"type": "PASSIVE", "friction": 1}}
 
 
-max_chromosome_size = 30
+max_chromosome_size = 10
 # pool_size must be a mutiple of 4 due to function mutatechromosomes()
-chromosome_pool_size = 4
+chromosome_pool_size = 12
 chromosomes_idxs = [[]] * chromosome_pool_size
 chromosome_fitness = [0] * chromosome_pool_size
 generation = 0
@@ -79,7 +79,7 @@ def get_closest_hinges(hinge_idx):
 
     hinge = bpy.context.scene.objects[hinge_set[hinge_idx]]
 
-    radius = 1
+    radius = 0.5
     closest_hinges = []
     for obj in bpy.context.scene.objects:
         if obj.name.startswith("hinge"):
@@ -440,7 +440,7 @@ def mutate_chromosomes():
     for idx in range(0, len(chromosome_fitness)):
         score_dict[idx] = chromosome_fitness[idx]
 
-    sorted_dict = sorted(score_dict.items(), key=lambda item: item[1])
+    sorted_dict = sorted(score_dict.items(), key=lambda item: item[1], reverse=True)
     parent1 = chromosomes_idxs[sorted_dict[0][0]]
     parent2 = chromosomes_idxs[sorted_dict[1][0]]
 
@@ -481,14 +481,14 @@ def evaluate_chromosome(chromosome, context):
     :return : The fitness score of the chromosome
     """
     scene = context.scene
-
-    chromosome_1d = sum(chromosome, [])
+    # ensure there are no duplicates in the list
+    chromosome_1d = list(dict.fromkeys(sum(chromosome, [])))
 
     bpy.context.scene.frame_set(frame=0)
     remove_physics_hinge(chromosome_1d)
     calc_physics(scene.my_tool)
 
-    bpy.context.scene.frame_set(frame=198)
+    bpy.context.scene.frame_set(frame=98)
     score = evaluate_demolition(len(chromosome))
 
     add_physics_hinge(chromosome_1d, scene.my_tool)
@@ -580,10 +580,10 @@ class DEMOLITION_OT_start(bpy.types.Operator):
         if len(displayed_demolition) == 0:
             bpy.context.scene.frame_set(frame=0)
             bpy.ops.object.select_all(action='DESELECT')
-            best_score = 10000
+            best_score = -10000
             index = -1
             for idx in range(0, len(chromosome_fitness)):
-                if (best_score > chromosome_fitness[idx]):
+                if (best_score < chromosome_fitness[idx]):
                     best_score = chromosome_fitness[idx]
                     index = idx
 
@@ -594,7 +594,8 @@ class DEMOLITION_OT_start(bpy.types.Operator):
 
             remove_physics_hinge(displayed_demolition)
 
-        calc_physics(mytool)
+            calc_physics(mytool)
+
         bpy.ops.screen.animation_play()
 
         return {'FINISHED'}
@@ -611,7 +612,11 @@ class DEMOLITION_OT_stop(bpy.types.Operator):
 
         bpy.ops.screen.animation_cancel(restore_frame=False)
         bpy.ops.object.select_all(action='DESELECT')
-        #add_physics_hinge(displayed_demolition, mytool)
+
+        global displayed_demolition
+        for idx in displayed_demolition:
+            objectToSelect = bpy.data.objects[hinge_set[idx]]
+            objectToSelect.select_set(True)
 
         return {'FINISHED'}
 
