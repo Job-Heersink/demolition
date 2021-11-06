@@ -491,6 +491,7 @@ def evaluate_chromosome(chromosome, context):
     bpy.context.scene.frame_set(frame=98)
     score = evaluate_demolition(len(chromosome))
 
+    bpy.context.scene.frame_set(frame=0)
     add_physics_hinge(chromosome_1d, scene.my_tool)
 
     return score
@@ -595,9 +596,14 @@ class DEMOLITION_OT_start(bpy.types.Operator):
 
             displayed_demolition = sum(chromosomes_idxs[index].copy(), [])
 
+            bpy.context.scene.frame_set(frame=0)
             remove_physics_hinge(displayed_demolition)
 
             calc_physics(mytool)
+
+            bpy.context.scene.frame_set(frame=0)
+            add_physics_hinge(displayed_demolition, scene.my_tool)
+
 
         bpy.ops.screen.animation_play()
 
