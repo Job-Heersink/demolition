@@ -41,9 +41,9 @@ The second 4 buttons perform the following actions:
 - Genetic algorithm : this button will run 10 generation of the genetic
 algorithm to see what is happening we advise you to open the Blender console.
 - Genetic Round : this button will run a single generation of the genetic
-algorithm  to see what is happening we advise you to open the Blender console.
+algorithm.  to see what is happening we advise you to open the Blender console.
 - Run best model : this button will compute the simulation of the best model
 in the current generation and thereafter start the simulation. _Note that_
 _nothing will happen if you haven't executed at least one genetic round yet._
-- Stop : this will freeze the simulation at the current point in time. Pressing
+- Stop : this will stop the simulation and show the evaluation score in the terminal window. Pressing
 the 'Run best model' button again will continue the simulation.
