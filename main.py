@@ -6,6 +6,7 @@ from random import randint
 from random import random
 from math import radians, sqrt, cos, sin
 from mathutils import Matrix, Vector
+import os
 
 sys.path.append('/home/job/.local/lib/python3.7/site-packages')
 
@@ -16,15 +17,14 @@ materials = {
     "dish": {"type": "ACTIVE", "density": 2710, "friction": 1.4, "collision_shape": "CONVEX_HULL"},
     "ground": {"type": "PASSIVE", "friction": 1}}
 
-
 max_chromosome_size = 10
 # pool_size must be a mutiple of 4 due to function mutatechromosomes()
-chromosome_pool_size = 12
+chromosome_pool_size = 8
 chromosomes_idxs = [[]] * chromosome_pool_size
 chromosome_fitness = [0] * chromosome_pool_size
 generation = 0
 
-accept_new_block = 0.6
+accept_new_block = 0.8
 mutation_rate = 0.35
 
 hinge_set = []
@@ -41,6 +41,7 @@ def init_hinge_set():
         if obj.name.startswith("hinge"):
             hinge_set.append(obj.name)
 
+
 def get_hinge_set_idx(hinge_name):
     """
     get the index of the hinge_name in the global hinge_set list
@@ -55,6 +56,7 @@ def get_hinge_set_idx(hinge_name):
 
     return -1
 
+
 def calc_physics(mytool):
     """
     computes the animation of the current configuration.
@@ -67,6 +69,7 @@ def calc_physics(mytool):
     bpy.context.scene.frame_start = 1
     bpy.context.scene.frame_end = 100
     bpy.ops.ptcache.bake_all(bake=True)
+
 
 def get_closest_hinges(hinge_idx):
     """
@@ -92,6 +95,7 @@ def get_closest_hinges(hinge_idx):
                 closest_hinges.append(get_hinge_set_idx(obj.name))
 
     return closest_hinges
+
 
 def find_position_sides(obj):
     """
@@ -150,7 +154,8 @@ def find_closest_object(this_obj):
 
 # before executing this script. MAKE SURE YOUR BUILD IS CENTERED AROUND ITS ORIGIN.
 # otherwise the evaluation might not work properly
-def evaluate_demolition(removed_clusters, w_r=3, w_h=5, w_d=1, hard_max_removed_clusters=36, hard_max_radius=50, hard_max_height=50):
+def evaluate_demolition(removed_clusters, w_r=3, w_h=5, w_d=1, hard_max_removed_clusters=36, hard_max_radius=50,
+                        hard_max_height=50):
     """
     evaluates the demolition of the current selected frame
 
@@ -190,7 +195,7 @@ def evaluate_demolition(removed_clusters, w_r=3, w_h=5, w_d=1, hard_max_removed_
     print(f"h_norm {h_norm}")
     print(f"d_norm {d_norm}")
 
-    result = (w_r*(1 - r_norm) + w_h*(1 - h_norm) ** 3 + w_d*(1 - d_norm)) / (w_r+w_h+w_d)
+    result = (w_r * (1 - r_norm) + w_h * (1 - h_norm) ** 3 + w_d * (1 - d_norm)) / (w_r + w_h + w_d)
     return result
 
 
@@ -350,7 +355,7 @@ def random_chromosome():
     """
     chromosome = []
     for idx in range(0, max_chromosome_size):
-        if random() > accept_new_block:
+        if random() < accept_new_block:
             not_in_chromosome = True
             obj_idx = randint(0, len(hinge_set) - 1)
             for idxs in chromosome:
@@ -359,7 +364,7 @@ def random_chromosome():
 
             if not_in_chromosome:
                 chromosome.append(get_closest_hinges(obj_idx))
-
+    print(chromosome)
     return chromosome
 
 
@@ -492,7 +497,8 @@ def evaluate_chromosome(chromosome, context):
     score = evaluate_demolition(len(chromosome))
 
     bpy.context.scene.frame_set(frame=0)
-    add_physics_hinge(chromosome_1d, scene.my_tool)
+    # add_physics_hinge(chromosome_1d, scene.my_tool)
+    add_physics_all_object(scene.my_tool.dem_threshold_float)
 
     return score
 
@@ -532,6 +538,8 @@ def run_generation(context):
     print("avg: " + str(avg_score))
     print("min: " + str(min_score))
     print("max: " + str(max_score))
+
+    return {"avg": avg_score, "min": min_score, "max": max_score}
 
 
 # define the sliders of the UI window
@@ -595,6 +603,8 @@ class DEMOLITION_OT_start(bpy.types.Operator):
             assert (index != -1)
 
             displayed_demolition = sum(chromosomes_idxs[index].copy(), [])
+            print(f"chr: {chromosomes_idxs[index]}")
+            print(f"disp: {displayed_demolition}")
 
             bpy.context.scene.frame_set(frame=0)
             remove_physics_hinge(displayed_demolition)
@@ -604,7 +614,7 @@ class DEMOLITION_OT_start(bpy.types.Operator):
             bpy.context.scene.frame_set(frame=0)
             add_physics_hinge(displayed_demolition, scene.my_tool)
 
-
+        print(f"disp ready: {displayed_demolition}")
         bpy.ops.screen.animation_play()
 
         return {'FINISHED'}
@@ -621,8 +631,10 @@ class DEMOLITION_OT_stop(bpy.types.Operator):
 
         bpy.ops.screen.animation_cancel(restore_frame=False)
         bpy.ops.object.select_all(action='DESELECT')
-
         global displayed_demolition, hinge_set
+        print(f"displayed_demolition: {displayed_demolition}")
+        bpy.context.scene.frame_set(frame=99)
+        score = evaluate_demolition(7)
         for idx in displayed_demolition:
             print(hinge_set[idx])
             objectToSelect = bpy.data.objects[hinge_set[idx]]
@@ -650,8 +662,7 @@ class DEMOLITION_OT_genetic_round(bpy.types.Operator):
             add_physics_hinge(displayed_demolition, mytool)
             displayed_demolition = []
 
-        if not physics_added:
-            add_physics_all_object(mytool.dem_threshold_float)
+        add_physics_all_object(mytool.dem_threshold_float)
 
         run_generation(context)
 
@@ -676,11 +687,11 @@ class DEMOLITION_OT_genetic(bpy.types.Operator):
             add_physics_hinge(displayed_demolition, mytool)
             displayed_demolition = []
 
-        if not physics_added:
-            add_physics_all_object(mytool.dem_threshold_float)
-
+        add_physics_all_object(mytool.dem_threshold_float)
+        results = []
         for x in range(0, 10):
-            run_generation(context)
+            results.append(run_generation(context))
+        print(results)
 
         return {'FINISHED'}
 
